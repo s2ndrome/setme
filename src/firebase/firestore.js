@@ -18,7 +18,7 @@ export async function isUsernameAvailable(username) {
   return !snap.exists();
 }
 
-export async function createUserProfile(uid, { username, nickname }) {
+export async function createUserProfile(uid, { username, nickname, profileImage }) {
   if (!isValidUsername(username)) {
     throw new Error('핸들은 영문 소문자/숫자/밑줄 3~20자만 가능합니다.');
   }
@@ -37,7 +37,7 @@ export async function createUserProfile(uid, { username, nickname }) {
       username,
       nickname: nickname || username,
       bio: '',
-      profileImage: '',
+      profileImage: profileImage || '',
       createdAt: serverTimestamp()
     });
 

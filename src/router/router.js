@@ -1,7 +1,6 @@
 export function parsePath(pathname) {
   if (pathname === '/' || pathname === '') return { name: 'landing' };
-  if (pathname === '/login') return { name: 'login' };
-  if (pathname === '/signup') return { name: 'signup' };
+  if (pathname === '/onboarding') return { name: 'onboarding' };
   if (pathname.startsWith('/@')) {
     return { name: 'home', username: decodeURIComponent(pathname.slice(2)) };
   }
