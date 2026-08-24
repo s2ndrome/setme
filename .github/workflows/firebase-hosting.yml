@@ -18,6 +18,6 @@ jobs:
       - run: echo "$FIREBASE_SERVICE_ACCOUNT" > /tmp/gcp-key.json
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      - run: npx firebase-tools deploy --only hosting,firestore:rules,storage:rules --project setme-b45b6 --non-interactive
+      - run: npx firebase-tools deploy --only hosting,firestore:rules --project setme-b45b6 --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
