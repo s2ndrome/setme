@@ -2,6 +2,15 @@ import { createUserProfile, isValidUsername, isUsernameAvailable } from '../fire
 import { navigate } from '../router/router.js';
 import { showToast } from '../ui/toast.js';
 
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('연결이 너무 느립니다. 네트워크 상태를 확인하고 다시 시도해 주세요.')), ms)
+    )
+  ]);
+}
+
 export function renderOnboarding(container, { currentUser }) {
   container.innerHTML = `
     <section class="auth-form">
@@ -20,9 +29,10 @@ export function renderOnboarding(container, { currentUser }) {
   `;
 
   const form = container.querySelector('#onboardingForm');
+  const submitBtn = form.querySelector('button[type="submit"]');
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const submitBtn = form.querySelector('button[type="submit"]');
     const data = new FormData(form);
     const username = data.get('username').trim().toLowerCase();
     const nickname = data.get('nickname').trim();
@@ -33,22 +43,27 @@ export function renderOnboarding(container, { currentUser }) {
     }
 
     submitBtn.disabled = true;
+    submitBtn.textContent = '처리 중...';
     try {
-      const available = await isUsernameAvailable(username);
+      const available = await withTimeout(isUsernameAvailable(username), 15000);
       if (!available) {
         showToast('이미 사용 중인 핸들입니다.', 'error');
         return;
       }
-      await createUserProfile(currentUser.uid, {
-        username,
-        nickname,
-        profileImage: currentUser.photoURL || ''
-      });
+      await withTimeout(
+        createUserProfile(currentUser.uid, {
+          username,
+          nickname,
+          profileImage: currentUser.photoURL || ''
+        }),
+        15000
+      );
       navigate(`/@${username}`);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {
       submitBtn.disabled = false;
+      submitBtn.textContent = '완료';
     }
   });
 }

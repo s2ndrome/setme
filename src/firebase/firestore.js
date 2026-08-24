@@ -1,7 +1,7 @@
 import {
   doc,
   getDoc,
-  runTransaction,
+  writeBatch,
   updateDoc,
   serverTimestamp
 } from 'firebase/firestore';
@@ -23,34 +23,37 @@ export async function createUserProfile(uid, { username, nickname, profileImage 
     throw new Error('핸들은 영문 소문자/숫자/밑줄 3~20자만 가능합니다.');
   }
 
-  await runTransaction(db, async (tx) => {
-    const usernameRef = doc(db, 'usernames', username);
-    const usernameSnap = await tx.get(usernameRef);
-    if (usernameSnap.exists()) {
+  const batch = writeBatch(db);
+
+  batch.set(doc(db, 'usernames', username), { uid });
+
+  batch.set(doc(db, 'users', uid), {
+    uid,
+    username,
+    nickname: nickname || username,
+    bio: '',
+    profileImage: profileImage || '',
+    createdAt: serverTimestamp()
+  });
+
+  batch.set(doc(db, 'homes', uid), {
+    uid,
+    visibility: 'public',
+    editMode: 'builder',
+    theme: 'basic',
+    background: { type: 'color', value: '#f5f5f5' },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (err.code === 'permission-denied') {
       throw new Error('이미 사용 중인 핸들입니다.');
     }
-
-    tx.set(usernameRef, { uid });
-
-    tx.set(doc(db, 'users', uid), {
-      uid,
-      username,
-      nickname: nickname || username,
-      bio: '',
-      profileImage: profileImage || '',
-      createdAt: serverTimestamp()
-    });
-
-    tx.set(doc(db, 'homes', uid), {
-      uid,
-      visibility: 'public',
-      editMode: 'builder',
-      theme: 'basic',
-      background: { type: 'color', value: '#f5f5f5' },
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-  });
+    throw err;
+  }
 }
 
 export async function getUserProfile(uid) {
