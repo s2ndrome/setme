@@ -4,6 +4,7 @@ import { parsePath, navigate, initLinkInterception } from './router/router.js';
 import { renderLanding } from './pages/landing.js';
 import { renderOnboarding } from './pages/onboarding.js';
 import { renderHome } from './pages/home.js';
+import { showToast } from './ui/toast.js';
 
 const app = document.getElementById('app');
 
@@ -43,6 +44,12 @@ window.addEventListener('setme:navigate', render);
 
 onAuthChange(async (user) => {
   currentUser = user;
-  currentProfile = user ? await getUserProfile(user.uid) : null;
+  try {
+    currentProfile = user ? await getUserProfile(user.uid) : null;
+  } catch (err) {
+    console.error('프로필을 불러오지 못했습니다.', err);
+    currentProfile = null;
+    showToast('서버 연결에 실패했습니다. 새로고침 해주세요.', 'error');
+  }
   render();
 });

@@ -5,7 +5,21 @@ import { navigate } from '../router/router.js';
 export async function renderHome(container, { username, currentUser }) {
   container.innerHTML = `<div class="loading">불러오는 중...</div>`;
 
-  const uid = await getUidByUsername(username);
+  let uid;
+  try {
+    uid = await getUidByUsername(username);
+  } catch (err) {
+    console.error('개인홈을 불러오지 못했습니다.', err);
+    container.innerHTML = `
+      <section class="empty-state">
+        <h1>연결 오류</h1>
+        <p>서버에 연결하지 못했습니다. 새로고침 해주세요.</p>
+        <a class="btn btn-ghost" data-link href="/">홈으로</a>
+      </section>
+    `;
+    return;
+  }
+
   if (!uid) {
     container.innerHTML = `
       <section class="empty-state">
@@ -17,7 +31,20 @@ export async function renderHome(container, { username, currentUser }) {
     return;
   }
 
-  const [profile, home] = await Promise.all([getUserProfile(uid), getHome(uid)]);
+  let profile, home;
+  try {
+    [profile, home] = await Promise.all([getUserProfile(uid), getHome(uid)]);
+  } catch (err) {
+    console.error('개인홈을 불러오지 못했습니다.', err);
+    container.innerHTML = `
+      <section class="empty-state">
+        <h1>연결 오류</h1>
+        <p>서버에 연결하지 못했습니다. 새로고침 해주세요.</p>
+        <a class="btn btn-ghost" data-link href="/">홈으로</a>
+      </section>
+    `;
+    return;
+  }
   const isOwner = currentUser && currentUser.uid === uid;
 
   if (!isOwner && home?.visibility === 'private') {
