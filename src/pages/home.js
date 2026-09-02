@@ -1,4 +1,5 @@
 import { getPublicProfile, signOutUser } from '../api/client.js';
+import { renderStaticCanvas, mountEditor } from '../editor/canvas.js';
 
 export async function renderHome(container, { username }) {
   container.innerHTML = `<div class="loading">불러오는 중...</div>`;
@@ -39,35 +40,61 @@ export async function renderHome(container, { username }) {
   }
 
   const { profile, isOwner } = data;
+  let home = data.home;
+  let elements = data.elements || [];
 
-  container.innerHTML = `
-    <section class="home-view">
-      <header class="home-topbar">
-        <span>@${profile.username}</span>
-        ${isOwner ? `
-          <div class="home-topbar-actions">
-            <button class="btn btn-ghost" id="editModeBtn" disabled title="Phase 2에서 제공 예정">꾸미기 모드</button>
-            <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
+  function renderView() {
+    container.innerHTML = `
+      <section class="home-view">
+        <header class="home-topbar">
+          <span>@${profile.username}</span>
+          ${isOwner ? `
+            <div class="home-topbar-actions">
+              <button class="btn btn-ghost" id="editModeBtn">꾸미기 모드</button>
+              <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
+            </div>
+          ` : ''}
+        </header>
+
+        <div class="profile-card">
+          <div class="profile-avatar">
+            ${profile.profileImage
+              ? `<img src="${profile.profileImage}" alt="${profile.nickname}">`
+              : `<div class="profile-avatar-placeholder">${profile.nickname[0]}</div>`}
           </div>
-        ` : ''}
-      </header>
-
-      <div class="profile-card">
-        <div class="profile-avatar">
-          ${profile.profileImage
-            ? `<img src="${profile.profileImage}" alt="${profile.nickname}">`
-            : `<div class="profile-avatar-placeholder">${profile.nickname[0]}</div>`}
+          <h2>${profile.nickname}</h2>
+          <p class="profile-bio">${profile.bio || (isOwner ? '아직 소개글이 없어요. 프로필을 편집해보세요.' : '')}</p>
         </div>
-        <h2>${profile.nickname}</h2>
-        <p class="profile-bio">${profile.bio || (isOwner ? '아직 소개글이 없어요. 프로필을 편집해보세요.' : '')}</p>
-      </div>
-    </section>
-  `;
 
-  if (isOwner) {
-    container.querySelector('#logoutBtn').addEventListener('click', async () => {
-      await signOutUser();
-      window.location.assign('/');
+        <div class="canvas-scroll">
+          <div class="canvas-stage" id="canvasStage" style="width:900px;height:1400px"></div>
+        </div>
+      </section>
+    `;
+
+    renderStaticCanvas(container.querySelector('#canvasStage'), { background: home.background, elements });
+
+    if (isOwner) {
+      container.querySelector('#editModeBtn').addEventListener('click', renderEdit);
+      container.querySelector('#logoutBtn').addEventListener('click', async () => {
+        await signOutUser();
+        window.location.assign('/');
+      });
+    }
+  }
+
+  function renderEdit() {
+    mountEditor({
+      container,
+      background: home.background,
+      elements,
+      onExit: (savedElements, savedBackground) => {
+        elements = savedElements;
+        home = { ...home, background: savedBackground };
+        renderView();
+      }
     });
   }
+
+  renderView();
 }

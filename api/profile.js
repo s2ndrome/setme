@@ -1,5 +1,6 @@
 import { sql } from './_lib/db.js';
 import { getUidFromRequest } from './_lib/auth.js';
+import { sanitizeElements } from './_lib/elements.js';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
@@ -24,6 +25,12 @@ async function handleGet(req, res) {
     return res.status(403).json({ error: 'private' });
   }
 
+  const elementRows = await sql`
+    select id, type, x, y, width, height, rotation, z_index, visible, opacity, content, style
+    from elements where uid = ${row.id}
+    order by z_index asc
+  `;
+
   return res.status(200).json({
     profile: {
       username: row.username,
@@ -36,6 +43,20 @@ async function handleGet(req, res) {
       theme: row.theme,
       background: row.background
     },
+    elements: elementRows.map((el) => ({
+      id: el.id,
+      type: el.type,
+      x: el.x,
+      y: el.y,
+      width: el.width,
+      height: el.height,
+      rotation: el.rotation,
+      zIndex: el.z_index,
+      visible: el.visible,
+      opacity: el.opacity,
+      content: el.content,
+      style: el.style
+    })),
     isOwner
   });
 }
@@ -79,7 +100,7 @@ async function handleUpdate(req, res) {
   const uid = getUidFromRequest(req);
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const { nickname, bio, profileImage, visibility, theme, background } = req.body || {};
+  const { nickname, bio, profileImage, visibility, theme, background, elements } = req.body || {};
 
   if (nickname !== undefined || bio !== undefined || profileImage !== undefined) {
     await sql`
@@ -100,6 +121,26 @@ async function handleUpdate(req, res) {
         updated_at = now()
       where uid = ${uid}
     `;
+  }
+
+  // The whole canvas is saved at once (explicit Save button on the client,
+  // not per-drag writes) to keep Postgres write volume down: one
+  // delete-and-reinsert per save, in a single transaction, regardless of
+  // how many elements the home has.
+  if (elements !== undefined) {
+    const clean = sanitizeElements(elements);
+    const queries = [sql`delete from elements where uid = ${uid}`];
+    for (const el of clean) {
+      queries.push(sql`
+        insert into elements
+          (uid, type, x, y, width, height, rotation, z_index, visible, opacity, content, style)
+        values
+          (${uid}, ${el.type}, ${el.x}, ${el.y}, ${el.width}, ${el.height},
+           ${el.rotation}, ${el.zIndex}, ${el.visible}, ${el.opacity},
+           ${el.content}::jsonb, ${el.style}::jsonb)
+      `);
+    }
+    await sql.transaction(queries);
   }
 
   return res.status(200).json({ ok: true });

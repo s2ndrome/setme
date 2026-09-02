@@ -45,6 +45,30 @@ export function getPublicProfile(username) {
   return request(`/profile?username=${encodeURIComponent(username)}`);
 }
 
+export function saveCanvas({ background, elements }) {
+  return request('/profile', { method: 'PUT', body: { background, elements } });
+}
+
+export function uploadImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('파일을 읽지 못했습니다.'));
+    reader.onload = async () => {
+      try {
+        const base64 = String(reader.result).split(',')[1];
+        const data = await request('/upload', {
+          method: 'POST',
+          body: { contentType: file.type, data: base64 }
+        });
+        resolve(data.url);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export function isValidUsername(username) {
   return /^[a-z0-9_]{3,20}$/.test(username);
 }
