@@ -1,5 +1,4 @@
-import { onAuthChange } from './firebase/auth.js';
-import { getUserProfile } from './firebase/firestore.js';
+import { getMe } from './api/client.js';
 import { parsePath, navigate, initLinkInterception } from './router/router.js';
 import { renderLanding } from './pages/landing.js';
 import { renderOnboarding } from './pages/onboarding.js';
@@ -9,7 +8,7 @@ const app = document.getElementById('app');
 
 let currentUser = null;
 let currentProfile = null;
-let profileLoadFailed = false;
+let sessionLoadFailed = false;
 
 function renderRetry() {
   app.innerHTML = `
@@ -22,10 +21,10 @@ function renderRetry() {
   app.querySelector('#retryBtn').addEventListener('click', () => window.location.reload());
 }
 
-async function render() {
+function render() {
   const route = parsePath(window.location.pathname);
 
-  if (profileLoadFailed) {
+  if (sessionLoadFailed) {
     renderRetry();
     return;
   }
@@ -47,7 +46,7 @@ async function render() {
       renderOnboarding(app, { currentUser });
       break;
     case 'home':
-      renderHome(app, { username: route.username, currentUser });
+      renderHome(app, { username: route.username });
       break;
     default:
       app.innerHTML = `<section class="empty-state"><h1>404</h1><p>페이지를 찾을 수 없습니다.</p></section>`;
@@ -60,15 +59,14 @@ window.addEventListener('setme:navigate', render);
 
 app.innerHTML = `<div class="loading">불러오는 중...</div>`;
 
-onAuthChange(async (user) => {
-  currentUser = user;
-  profileLoadFailed = false;
+(async () => {
   try {
-    currentProfile = user ? await getUserProfile(user.uid) : null;
+    const data = await getMe();
+    currentUser = data.user;
+    currentProfile = data.profile;
   } catch (err) {
-    console.error('프로필을 불러오지 못했습니다.', err);
-    currentProfile = null;
-    profileLoadFailed = true;
+    console.error('세션을 불러오지 못했습니다.', err);
+    sessionLoadFailed = true;
   }
   render();
-});
+})();

@@ -1,14 +1,32 @@
-import { getUidByUsername, getUserProfile, getHome } from '../firebase/firestore.js';
-import { signOutUser } from '../firebase/auth.js';
-import { navigate } from '../router/router.js';
+import { getPublicProfile, signOutUser } from '../api/client.js';
 
-export async function renderHome(container, { username, currentUser }) {
+export async function renderHome(container, { username }) {
   container.innerHTML = `<div class="loading">불러오는 중...</div>`;
 
-  let uid;
+  let data;
   try {
-    uid = await getUidByUsername(username);
+    data = await getPublicProfile(username);
   } catch (err) {
+    if (err.status === 404) {
+      container.innerHTML = `
+        <section class="empty-state">
+          <h1>@${username}</h1>
+          <p>존재하지 않는 핸들입니다.</p>
+          <a class="btn btn-ghost" data-link href="/">홈으로</a>
+        </section>
+      `;
+      return;
+    }
+    if (err.status === 403) {
+      container.innerHTML = `
+        <section class="empty-state">
+          <h1>@${username}</h1>
+          <p>비공개로 설정된 개인홈입니다.</p>
+          <a class="btn btn-ghost" data-link href="/">홈으로</a>
+        </section>
+      `;
+      return;
+    }
     console.error('개인홈을 불러오지 못했습니다.', err);
     container.innerHTML = `
       <section class="empty-state">
@@ -20,43 +38,7 @@ export async function renderHome(container, { username, currentUser }) {
     return;
   }
 
-  if (!uid) {
-    container.innerHTML = `
-      <section class="empty-state">
-        <h1>@${username}</h1>
-        <p>존재하지 않는 핸들입니다.</p>
-        <a class="btn btn-ghost" data-link href="/">홈으로</a>
-      </section>
-    `;
-    return;
-  }
-
-  let profile, home;
-  try {
-    [profile, home] = await Promise.all([getUserProfile(uid), getHome(uid)]);
-  } catch (err) {
-    console.error('개인홈을 불러오지 못했습니다.', err);
-    container.innerHTML = `
-      <section class="empty-state">
-        <h1>연결 오류</h1>
-        <p>서버에 연결하지 못했습니다. 새로고침 해주세요.</p>
-        <a class="btn btn-ghost" data-link href="/">홈으로</a>
-      </section>
-    `;
-    return;
-  }
-  const isOwner = currentUser && currentUser.uid === uid;
-
-  if (!isOwner && home?.visibility === 'private') {
-    container.innerHTML = `
-      <section class="empty-state">
-        <h1>@${username}</h1>
-        <p>비공개로 설정된 개인홈입니다.</p>
-        <a class="btn btn-ghost" data-link href="/">홈으로</a>
-      </section>
-    `;
-    return;
-  }
+  const { profile, isOwner } = data;
 
   container.innerHTML = `
     <section class="home-view">
@@ -85,7 +67,7 @@ export async function renderHome(container, { username, currentUser }) {
   if (isOwner) {
     container.querySelector('#logoutBtn').addEventListener('click', async () => {
       await signOutUser();
-      navigate('/');
+      window.location.assign('/');
     });
   }
 }

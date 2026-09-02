@@ -1,5 +1,4 @@
-import { createUserProfile, isValidUsername, isUsernameAvailable } from '../firebase/firestore.js';
-import { navigate } from '../router/router.js';
+import { createUserProfile, isValidUsername, isUsernameAvailable } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 
 function withTimeout(promise, ms) {
@@ -21,7 +20,7 @@ export function renderOnboarding(container, { currentUser }) {
           <input type="text" name="username" placeholder="영문 소문자/숫자/밑줄 3~20자" required>
         </label>
         <label>닉네임
-          <input type="text" name="nickname" value="${currentUser.displayName || ''}" required>
+          <input type="text" name="nickname" value="${currentUser.email.split('@')[0]}" required>
         </label>
         <button type="submit" class="btn btn-primary">완료</button>
       </form>
@@ -50,15 +49,9 @@ export function renderOnboarding(container, { currentUser }) {
         showToast('이미 사용 중인 핸들입니다.', 'error');
         return;
       }
-      await withTimeout(
-        createUserProfile(currentUser.uid, {
-          username,
-          nickname,
-          profileImage: currentUser.photoURL || ''
-        }),
-        15000
-      );
-      navigate(`/@${username}`);
+      await withTimeout(createUserProfile({ username, nickname }), 15000);
+      // Full reload so the app re-fetches the session with the new profile.
+      window.location.assign(`/@${username}`);
     } catch (err) {
       showToast(err.message, 'error');
     } finally {

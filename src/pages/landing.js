@@ -1,10 +1,4 @@
-import {
-  signInWithGoogle,
-  isCancelledPopupError,
-  signUpWithEmail,
-  signInWithEmail,
-  describeEmailAuthError
-} from '../firebase/auth.js';
+import { signUp, signIn } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 
 export function renderLanding(container, { currentUser, profile }) {
@@ -45,10 +39,6 @@ export function renderLanding(container, { currentUser, profile }) {
             <button type="button" class="link-button" id="modeToggleBtn">${mode === 'signup' ? '로그인' : '회원가입'}</button>
           </p>
         </section>
-
-        <div class="landing-actions">
-          <button id="googleSignInBtn" class="btn btn-ghost">Google로 계속하기</button>
-        </div>
       </section>
     `;
 
@@ -68,27 +58,15 @@ export function renderLanding(container, { currentUser, profile }) {
       submitBtn.disabled = true;
       try {
         if (mode === 'signup') {
-          await signUpWithEmail(email, password);
+          await signUp(email, password);
         } else {
-          await signInWithEmail(email, password);
+          await signIn(email, password);
         }
+        // Full reload so the app re-fetches the session from scratch.
+        window.location.assign('/');
       } catch (err) {
-        showToast(describeEmailAuthError(err), 'error');
+        showToast(err.message, 'error');
         submitBtn.disabled = false;
-      }
-    });
-
-    const googleBtn = container.querySelector('#googleSignInBtn');
-    googleBtn.addEventListener('click', async () => {
-      googleBtn.disabled = true;
-      try {
-        await signInWithGoogle();
-      } catch (err) {
-        if (!isCancelledPopupError(err)) {
-          showToast('로그인 중 오류가 발생했습니다.', 'error');
-        }
-      } finally {
-        googleBtn.disabled = false;
       }
     });
   }
