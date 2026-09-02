@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -15,5 +15,11 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+// Some networks/security software block Firestore's default streaming
+// (WebChannel) transport, which surfaces as "client is offline" even
+// though the network is otherwise fine. Auto-detecting long-polling
+// falls back to plain HTTP requests when that happens.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true
+});
 export const storage = getStorage(app);
