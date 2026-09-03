@@ -20,7 +20,7 @@ async function handleGet(req, res) {
 
   const result = await sql`
     select u.id, u.username, u.nickname, u.bio, u.profile_image,
-           h.visibility, h.theme, h.background, h.header_image, h.header_position, h.custom_css, h.theme_colors,
+           h.visibility, h.theme, h.background, h.header_image, h.header_position, h.header_enabled, h.custom_css, h.theme_colors,
            h.site_name, h.favicon_url, h.cursor_url, h.banner_image, h.banner_title, h.font_family
     from users u
     left join homes h on h.uid = u.id
@@ -49,6 +49,7 @@ async function handleGet(req, res) {
       background: row.background,
       headerImage: row.header_image || '',
       headerPosition: row.header_position || { x: 50, y: 50 },
+      headerEnabled: row.header_enabled !== false,
       customCss: row.custom_css || '',
       themeColors: row.theme_colors || {},
       siteName: row.site_name || '',
@@ -115,6 +116,7 @@ async function handleUpdate(req, res) {
     background,
     headerImage,
     headerPosition,
+    headerEnabled,
     customCss,
     themeColors,
     siteName,
@@ -127,6 +129,7 @@ async function handleUpdate(req, res) {
   const cleanCustomCss = customCss !== undefined ? sanitizeCss(customCss) : undefined;
   const cleanThemeColors = themeColors !== undefined ? sanitizeThemeColors(themeColors) : undefined;
   const cleanHeaderPosition = headerPosition !== undefined ? sanitizeHeaderPosition(headerPosition) : undefined;
+  const cleanHeaderEnabled = headerEnabled !== undefined ? headerEnabled === true : undefined;
   const cleanSiteName = siteName !== undefined ? sanitizeShortText(siteName, 60) : undefined;
   const cleanFaviconUrl = faviconUrl !== undefined ? sanitizeUrl(faviconUrl) : undefined;
   const cleanCursorUrl = cursorUrl !== undefined ? sanitizeUrl(cursorUrl) : undefined;
@@ -150,6 +153,7 @@ async function handleUpdate(req, res) {
     background !== undefined ||
     headerImage !== undefined ||
     cleanHeaderPosition !== undefined ||
+    cleanHeaderEnabled !== undefined ||
     cleanCustomCss !== undefined ||
     cleanThemeColors !== undefined ||
     cleanSiteName !== undefined ||
@@ -166,6 +170,7 @@ async function handleUpdate(req, res) {
         background = coalesce(${background ? JSON.stringify(background) : null}::jsonb, background),
         header_image = coalesce(${headerImage}, header_image),
         header_position = coalesce(${cleanHeaderPosition ? JSON.stringify(cleanHeaderPosition) : null}::jsonb, header_position),
+        header_enabled = coalesce(${cleanHeaderEnabled}, header_enabled),
         custom_css = coalesce(${cleanCustomCss}, custom_css),
         theme_colors = coalesce(${cleanThemeColors ? JSON.stringify(cleanThemeColors) : null}::jsonb, theme_colors),
         site_name = coalesce(${cleanSiteName}, site_name),

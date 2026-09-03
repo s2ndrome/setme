@@ -1149,6 +1149,19 @@ input[type="color"]::-moz-color-swatch {
   background: rgba(255, 255, 255, 0.9);
 }
 
+.home-header-off {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-bottom: 1px dashed var(--color-border);
+}
+
+.home-header-off .btn {
+  font-size: 11.5px;
+  padding: 4px 12px;
+}
+
 /* Menu / pages */
 
 .home-menu {

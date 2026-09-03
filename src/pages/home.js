@@ -95,6 +95,43 @@ export async function renderHome(container, { username, pageSlug }) {
     `;
   }
 
+  function renderHeaderSection(page) {
+    if (!page.isDefault) return '';
+    const headerVisible = home.headerEnabled !== false;
+
+    if (!headerVisible) {
+      if (!isOwner) return '';
+      return `
+        <div class="home-header home-header-off">
+          <button type="button" class="btn btn-ghost" id="headerEnableBtn">+ 헤더 표시</button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="home-header">
+        ${
+          home.headerImage
+            ? `<img class="home-header-img" id="headerImg" src="${escapeHtml(home.headerImage)}" alt="" draggable="false"
+                style="object-position:${(home.headerPosition?.x ?? 50)}% ${(home.headerPosition?.y ?? 50)}%">`
+            : `<div class="home-header-placeholder">${isOwner ? '헤더 이미지를 추가해보세요' : ''}</div>`
+        }
+        ${
+          isOwner
+            ? `
+          <div class="home-header-actions">
+            <button type="button" class="btn btn-ghost" id="headerImageBtn">${home.headerImage ? '이미지 변경' : '이미지 추가'}</button>
+            ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerRepositionBtn">위치 조정</button>` : ''}
+            ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerImageRemoveBtn">삭제</button>` : ''}
+            <button type="button" class="btn btn-ghost" id="headerDisableBtn">헤더 숨기기</button>
+          </div>
+        `
+            : ''
+        }
+      </div>
+    `;
+  }
+
   async function renderShell() {
     const page = findPage();
     if (!page) {
@@ -127,31 +164,7 @@ export async function renderHome(container, { username, pageSlug }) {
           }
         </header>
 
-        ${
-          page.isDefault
-            ? `
-          <div class="home-header">
-            ${
-              home.headerImage
-                ? `<img class="home-header-img" id="headerImg" src="${escapeHtml(home.headerImage)}" alt="" draggable="false"
-                    style="object-position:${(home.headerPosition?.x ?? 50)}% ${(home.headerPosition?.y ?? 50)}%">`
-                : `<div class="home-header-placeholder">${isOwner ? '헤더 이미지를 추가해보세요' : ''}</div>`
-            }
-            ${
-              isOwner
-                ? `
-              <div class="home-header-actions">
-                <button type="button" class="btn btn-ghost" id="headerImageBtn">${home.headerImage ? '이미지 변경' : '이미지 추가'}</button>
-                ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerRepositionBtn">위치 조정</button>` : ''}
-                ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerImageRemoveBtn">삭제</button>` : ''}
-              </div>
-            `
-                : ''
-            }
-          </div>
-        `
-            : ''
-        }
+        ${renderHeaderSection(page)}
 
         ${renderMenu(page)}
         <div id="pageContent"></div>
@@ -183,6 +196,10 @@ export async function renderHome(container, { username, pageSlug }) {
           }
         });
       }
+      const headerDisableBtn = container.querySelector('#headerDisableBtn');
+      if (headerDisableBtn) headerDisableBtn.addEventListener('click', () => setHeaderEnabled(false));
+      const headerEnableBtn = container.querySelector('#headerEnableBtn');
+      if (headerEnableBtn) headerEnableBtn.addEventListener('click', () => setHeaderEnabled(true));
     }
 
     const content = container.querySelector('#pageContent');
@@ -278,6 +295,16 @@ export async function renderHome(container, { username, pageSlug }) {
       repositioningHeader = false;
       if (headerDragCleanup) headerDragCleanup();
       saveHeaderPosition(headerDragPosition);
+    }
+  }
+
+  async function setHeaderEnabled(enabled) {
+    try {
+      await updateProfile({ headerEnabled: enabled });
+      home.headerEnabled = enabled;
+      renderShell();
+    } catch (err) {
+      showToast(err.message || '저장에 실패했습니다.', 'error');
     }
   }
 
