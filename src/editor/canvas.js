@@ -775,9 +775,12 @@ export function mountEditor({
   function renderBody(node, el) {
     const body = node.querySelector('.ce-body');
     body.innerHTML = elementBodyHTML(el);
-    const rounded = roundedStyle(el);
-    body.style.borderRadius = rounded.borderRadius;
-    body.style.overflow = rounded.overflow;
+    const wrap = wrapperStyle(el);
+    body.style.borderRadius = wrap.borderRadius;
+    body.style.overflow = wrap.overflow;
+    body.style.background = wrap.background;
+    body.style.padding = wrap.padding;
+    body.style.boxSizing = 'border-box';
   }
 
   function buildElementNode(el) {
@@ -1231,6 +1234,12 @@ export function mountEditor({
       </label>
       <label class="editor-inline-check">
         <input type="checkbox" ${el.style?.rounded ? 'checked' : ''} data-field="style.rounded"> 모서리 둥글게
+      </label>
+      <label class="editor-inline-check">
+        <input type="checkbox" ${el.style?.blockBg ? 'checked' : ''} data-field="style.blockBg"> 배경 블록 사용
+      </label>
+      <label>블록 색상
+        <input type="color" value="${safeColor(el.style?.blockColor, '#ffffff')}" data-field="style.blockColor">
       </label>
       ${elementFieldsHTML(el)}
     `;
