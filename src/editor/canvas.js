@@ -246,7 +246,7 @@ const WIDGETS = {
     width: 320,
     height: 240,
     content: { title: 'FRIENDS', layout: 'grid2', handles: '' },
-    style: {},
+    style: { blockBg: true, blockColor: '#ffffff' },
     render(content, style, el) {
       const handles = linesOf(content.handles).map((h) => h.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
       if (handles.length === 0) return `<div class="ce-placeholder">핸들을 추가해주세요</div>`;
@@ -633,19 +633,29 @@ function elementBodyHTML(el) {
   }
 }
 
-function roundedStyle(el) {
-  return el.style?.rounded ? { borderRadius: '16px', overflow: 'hidden' } : { borderRadius: '0px', overflow: 'visible' };
+// Shared by the editor's .ce-body and the static (view-mode) node — an
+// element/widget can optionally sit inside an opaque, colored block
+// instead of rendering straight onto the page background.
+function wrapperStyle(el) {
+  const rounded = !!el.style?.rounded;
+  const blockOn = !!el.style?.blockBg;
+  return {
+    borderRadius: rounded ? '16px' : '0px',
+    overflow: rounded || blockOn ? 'hidden' : 'visible',
+    background: blockOn ? safeColor(el.style.blockColor, '#ffffff') : 'transparent',
+    padding: blockOn ? '12px' : '0'
+  };
 }
 
 export function renderStaticCanvas(mount, { background, elements }) {
-  applyBackground(mount, background);
+  applyBackground(mount.parentElement || mount, background);
   mount.innerHTML = '';
   const sorted = [...(elements || [])].sort((a, b) => a.zIndex - b.zIndex);
   for (const el of sorted) {
     if (el.visible === false) continue;
     const node = document.createElement('div');
     node.className = 'canvas-element';
-    const rounded = roundedStyle(el);
+    const wrap = wrapperStyle(el);
     Object.assign(node.style, {
       left: `${el.x}px`,
       top: `${el.y}px`,
@@ -654,8 +664,11 @@ export function renderStaticCanvas(mount, { background, elements }) {
       transform: `rotate(${el.rotation || 0}deg)`,
       opacity: el.opacity ?? 1,
       zIndex: el.zIndex ?? 0,
-      borderRadius: rounded.borderRadius,
-      overflow: rounded.overflow
+      borderRadius: wrap.borderRadius,
+      overflow: wrap.overflow,
+      background: wrap.background,
+      padding: wrap.padding,
+      boxSizing: 'border-box'
     });
     node.innerHTML = elementBodyHTML(el);
     mount.appendChild(node);
@@ -732,7 +745,7 @@ export function mountEditor({
   const stage = container.querySelector('#stage');
   const dirtyIndicator = container.querySelector('#dirtyIndicator');
 
-  applyBackground(stage, state.background);
+  applyBackground(stage.parentElement, state.background);
 
   function markDirty() {
     state.dirty = true;
@@ -1112,7 +1125,7 @@ export function mountEditor({
         fields.innerHTML = `<label>색상<input type="color" id="bgColor" value="${value}"></label>`;
         fields.querySelector('#bgColor').addEventListener('input', (e) => {
           bg.value = e.target.value;
-          applyBackground(stage, bg);
+          applyBackground(stage.parentElement, bg);
           markDirty();
         });
       } else if (bg.type === 'gradient') {
@@ -1123,7 +1136,7 @@ export function mountEditor({
         `;
         fields.querySelector('#bgGradient').addEventListener('input', (e) => {
           bg.value = e.target.value;
-          applyBackground(stage, bg);
+          applyBackground(stage.parentElement, bg);
           markDirty();
         });
       } else if (bg.type === 'image') {
@@ -1141,7 +1154,7 @@ export function mountEditor({
         fields.querySelector('#bgUploadBtn').addEventListener('click', () => {
           uploadStateField((url) => {
             bg.value = url;
-            applyBackground(stage, bg);
+            applyBackground(stage.parentElement, bg);
             markDirty();
             renderBgFields();
           });
@@ -1149,7 +1162,7 @@ export function mountEditor({
         fields.querySelector('#bgSize').addEventListener('change', (e) => {
           bg.size = e.target.value === 'repeat' ? 'auto' : e.target.value;
           bg.repeat = e.target.value === 'repeat' ? 'repeat' : 'no-repeat';
-          applyBackground(stage, bg);
+          applyBackground(stage.parentElement, bg);
           markDirty();
         });
       }
@@ -1160,7 +1173,7 @@ export function mountEditor({
       bg.type = e.target.value;
       if (bg.type === 'color' && !/^#[0-9a-fA-F]{6}$/.test(bg.value)) bg.value = '#f5f5f5';
       renderBgFields();
-      applyBackground(stage, bg);
+      applyBackground(stage.parentElement, bg);
       markDirty();
     });
 
