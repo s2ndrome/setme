@@ -9,7 +9,7 @@ async function handleGet(req, res) {
 
   const result = await sql`
     select u.id, u.username, u.nickname, u.bio, u.profile_image,
-           h.visibility, h.theme, h.background
+           h.visibility, h.theme, h.background, h.header_image
     from users u
     left join homes h on h.uid = u.id
     where u.username = ${username}
@@ -34,7 +34,8 @@ async function handleGet(req, res) {
     home: {
       visibility: row.visibility,
       theme: row.theme,
-      background: row.background
+      background: row.background,
+      headerImage: row.header_image || ''
     },
     isOwner
   });
@@ -84,7 +85,7 @@ async function handleUpdate(req, res) {
   const uid = getUidFromRequest(req);
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const { nickname, bio, profileImage, visibility, theme, background } = req.body || {};
+  const { nickname, bio, profileImage, visibility, theme, background, headerImage } = req.body || {};
 
   if (nickname !== undefined || bio !== undefined || profileImage !== undefined) {
     await sql`
@@ -96,12 +97,13 @@ async function handleUpdate(req, res) {
     `;
   }
 
-  if (visibility !== undefined || theme !== undefined || background !== undefined) {
+  if (visibility !== undefined || theme !== undefined || background !== undefined || headerImage !== undefined) {
     await sql`
       update homes set
         visibility = coalesce(${visibility}, visibility),
         theme = coalesce(${theme}, theme),
         background = coalesce(${background ? JSON.stringify(background) : null}::jsonb, background),
+        header_image = coalesce(${headerImage}, header_image),
         updated_at = now()
       where uid = ${uid}
     `;

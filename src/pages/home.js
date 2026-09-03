@@ -6,7 +6,9 @@ import {
   createPage,
   renamePage,
   reorderPages,
-  deletePage
+  deletePage,
+  updateProfile,
+  uploadImage
 } from '../api/client.js';
 import { renderStaticCanvas, mountEditor } from '../editor/canvas.js';
 import { renderBoard } from './board.js';
@@ -111,16 +113,22 @@ export async function renderHome(container, { username, pageSlug }) {
         ${
           page.isDefault
             ? `
-          <div class="profile-card">
-            <div class="profile-avatar">
-              ${
-                profile.profileImage
-                  ? `<img src="${profile.profileImage}" alt="${escapeHtml(profile.nickname)}">`
-                  : `<div class="profile-avatar-placeholder">${escapeHtml(profile.nickname[0] || '?')}</div>`
-              }
-            </div>
-            <h2>${escapeHtml(profile.nickname)}</h2>
-            <p class="profile-bio">${escapeHtml(profile.bio) || (isOwner ? '아직 소개글이 없어요. 프로필을 편집해보세요.' : '')}</p>
+          <div class="home-header">
+            ${
+              home.headerImage
+                ? `<img class="home-header-img" src="${escapeHtml(home.headerImage)}" alt="">`
+                : `<div class="home-header-placeholder">${isOwner ? '헤더 이미지를 추가해보세요' : ''}</div>`
+            }
+            ${
+              isOwner
+                ? `
+              <div class="home-header-actions">
+                <button type="button" class="btn btn-ghost" id="headerImageBtn">${home.headerImage ? '이미지 변경' : '이미지 추가'}</button>
+                ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerImageRemoveBtn">삭제</button>` : ''}
+              </div>
+            `
+                : ''
+            }
           </div>
         `
             : ''
@@ -139,6 +147,21 @@ export async function renderHome(container, { username, pageSlug }) {
       container.querySelector('#managePagesBtn').addEventListener('click', openPagesManager);
       const editBtn = container.querySelector('#editModeBtn');
       if (editBtn) editBtn.addEventListener('click', () => enterEditMode(page));
+
+      const headerBtn = container.querySelector('#headerImageBtn');
+      if (headerBtn) headerBtn.addEventListener('click', pickHeaderImage);
+      const headerRemoveBtn = container.querySelector('#headerImageRemoveBtn');
+      if (headerRemoveBtn) {
+        headerRemoveBtn.addEventListener('click', async () => {
+          try {
+            await updateProfile({ headerImage: '' });
+            home.headerImage = '';
+            renderShell();
+          } catch (err) {
+            showToast(err.message || '삭제에 실패했습니다.', 'error');
+          }
+        });
+      }
     }
 
     const content = container.querySelector('#pageContent');
@@ -165,6 +188,29 @@ export async function renderHome(container, { username, pageSlug }) {
     } else if (page.kind === 'guestbook') {
       renderGuestbook(content, { username, isOwner });
     }
+  }
+
+  function pickHeaderImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 3 * 1024 * 1024) {
+        showToast('이미지 용량은 3MB 이하만 가능합니다.', 'error');
+        return;
+      }
+      try {
+        const url = await uploadImage(file);
+        await updateProfile({ headerImage: url });
+        home.headerImage = url;
+        renderShell();
+      } catch (err) {
+        showToast(err.message || '업로드에 실패했습니다.', 'error');
+      }
+    });
+    input.click();
   }
 
   async function enterEditMode(page) {
