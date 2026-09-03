@@ -182,41 +182,27 @@ const WIDGETS = {
       `;
     }
   },
-  preference: {
-    label: '성향표 (호불호)',
+  notice: {
+    label: '공지',
     width: 320,
-    height: 220,
-    content: { likeTitle: 'LIKE', hateTitle: 'HATE', likes: '', hates: '' },
+    height: 120,
+    content: { title: 'NOTICE', body: '' },
     style: {},
     render(content) {
-      const likes = linesOf(content.likes);
-      const hates = linesOf(content.hates);
       return `
-        <div class="w-pref">
-          <div class="w-pref-col">
-            <h4>${escapeHtml(content.likeTitle || 'LIKE')}</h4>
-            <ul>${likes.map((t) => `<li>♥ ${escapeHtml(t)}</li>`).join('')}</ul>
-          </div>
-          <div class="w-pref-col">
-            <h4>${escapeHtml(content.hateTitle || 'HATE')}</h4>
-            <ul>${hates.map((t) => `<li>✕ ${escapeHtml(t)}</li>`).join('')}</ul>
-          </div>
+        <div class="w-notice">
+          <div class="w-notice-title">${escapeHtml(content.title || 'NOTICE')}</div>
+          <div class="w-notice-body">${escapeHtml(content.body || '')}</div>
         </div>
       `;
     },
     fields(content) {
       return `
-        <label>LIKE 제목
-          <input type="text" data-field="content.likeTitle" value="${escapeHtml(content.likeTitle || '')}">
+        <label>제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}" placeholder="NOTICE">
         </label>
-        <label>LIKE 목록 (줄바꿈으로 구분)
-          <textarea data-field="content.likes" rows="3">${escapeHtml(content.likes || '')}</textarea>
-        </label>
-        <label>HATE 제목
-          <input type="text" data-field="content.hateTitle" value="${escapeHtml(content.hateTitle || '')}">
-        </label>
-        <label>HATE 목록 (줄바꿈으로 구분)
-          <textarea data-field="content.hates" rows="3">${escapeHtml(content.hates || '')}</textarea>
+        <label>내용
+          <textarea data-field="content.body" rows="4">${escapeHtml(content.body || '')}</textarea>
         </label>
       `;
     }
@@ -542,20 +528,25 @@ const WIDGETS = {
   }
 };
 
+// The default background just tracks the theme's own background color
+// (a CSS var, resolved live by the browser) instead of a hardcoded hex —
+// otherwise a page you never explicitly customized in "배경" would paint
+// over whatever color you picked in "테마" and the two would visibly
+// disagree with each other.
 export function applyBackground(el, background) {
-  const bg = background || { type: 'color', value: '#f5f5f5' };
+  const bg = background || { type: 'color', value: 'var(--color-bg)' };
   el.style.backgroundImage = '';
   el.style.backgroundSize = '';
   el.style.backgroundRepeat = '';
   el.style.backgroundPosition = '';
   if (bg.type === 'image' && bg.value) {
-    el.style.background = '#f5f5f5';
+    el.style.background = 'var(--color-bg)';
     el.style.backgroundImage = `url(${JSON.stringify(bg.value)})`;
     el.style.backgroundSize = bg.size || 'cover';
     el.style.backgroundRepeat = bg.repeat || 'no-repeat';
     el.style.backgroundPosition = 'center';
   } else {
-    el.style.background = bg.value || '#f5f5f5';
+    el.style.background = bg.value || 'var(--color-bg)';
   }
 }
 
@@ -689,7 +680,7 @@ export function mountEditor({
   onExit
 }) {
   const state = {
-    background: background ? { ...background } : { type: 'color', value: '#f5f5f5' },
+    background: background ? { ...background } : { type: 'color', value: 'var(--color-bg)' },
     elements: (initialElements || []).map((el) => ({ ...el, id: el.id || genId() })),
     selectedId: null,
     dirty: false,
@@ -1114,8 +1105,14 @@ export function mountEditor({
     function renderBgFields() {
       const fields = body.querySelector('#bgFields');
       if (bg.type === 'color') {
-        const value = /^#[0-9a-fA-F]{6}$/.test(bg.value) ? bg.value : '#f5f5f5';
-        fields.innerHTML = `<label>색상<input type="color" id="bgColor" value="${value}"></label>`;
+        const isThemeLinked = bg.value === 'var(--color-bg)';
+        const previewValue = isThemeLinked
+          ? resolveThemeColors(state.theme, state.themeColors).bg
+          : /^#[0-9a-fA-F]{6}$/.test(bg.value) ? bg.value : '#f5f5f5';
+        fields.innerHTML = `
+          <label>색상<input type="color" id="bgColor" value="${previewValue}"></label>
+          ${isThemeLinked ? '<p class="editor-panel-empty">테마 배경색을 그대로 따라가는 중이에요. 색을 바꾸면 이 페이지만 별도로 고정돼요.</p>' : ''}
+        `;
         fields.querySelector('#bgColor').addEventListener('input', (e) => {
           bg.value = e.target.value;
           applyBackground(stage.parentElement, bg);
