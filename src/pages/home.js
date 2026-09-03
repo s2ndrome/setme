@@ -64,6 +64,10 @@ export async function renderHome(container, { username, pageSlug }) {
   const isOwner = pagesData.isOwner;
   let pages = pagesData.pages;
 
+  let repositioningHeader = false;
+  let headerDragPosition = null;
+  let headerDragCleanup = null;
+
   function findPage() {
     return (pageSlug ? pages.find((p) => p.slug === pageSlug) : null) || pages.find((p) => p.isDefault) || pages[0];
   }
@@ -123,7 +127,8 @@ export async function renderHome(container, { username, pageSlug }) {
           <div class="home-header">
             ${
               home.headerImage
-                ? `<img class="home-header-img" src="${escapeHtml(home.headerImage)}" alt="">`
+                ? `<img class="home-header-img" id="headerImg" src="${escapeHtml(home.headerImage)}" alt="" draggable="false"
+                    style="object-position:${(home.headerPosition?.x ?? 50)}% ${(home.headerPosition?.y ?? 50)}%">`
                 : `<div class="home-header-placeholder">${isOwner ? '헤더 이미지를 추가해보세요' : ''}</div>`
             }
             ${
@@ -131,6 +136,7 @@ export async function renderHome(container, { username, pageSlug }) {
                 ? `
               <div class="home-header-actions">
                 <button type="button" class="btn btn-ghost" id="headerImageBtn">${home.headerImage ? '이미지 변경' : '이미지 추가'}</button>
+                ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerRepositionBtn">위치 조정</button>` : ''}
                 ${home.headerImage ? `<button type="button" class="btn btn-ghost" id="headerImageRemoveBtn">삭제</button>` : ''}
               </div>
             `
@@ -159,6 +165,8 @@ export async function renderHome(container, { username, pageSlug }) {
 
       const headerBtn = container.querySelector('#headerImageBtn');
       if (headerBtn) headerBtn.addEventListener('click', pickHeaderImage);
+      const headerRepositionBtn = container.querySelector('#headerRepositionBtn');
+      if (headerRepositionBtn) headerRepositionBtn.addEventListener('click', toggleHeaderReposition);
       const headerRemoveBtn = container.querySelector('#headerImageRemoveBtn');
       if (headerRemoveBtn) {
         headerRemoveBtn.addEventListener('click', async () => {
@@ -220,6 +228,64 @@ export async function renderHome(container, { username, pageSlug }) {
       }
     });
     input.click();
+  }
+
+  function toggleHeaderReposition() {
+    const img = container.querySelector('#headerImg');
+    const btn = container.querySelector('#headerRepositionBtn');
+    if (!img || !btn) return;
+
+    if (!repositioningHeader) {
+      repositioningHeader = true;
+      headerDragPosition = { x: home.headerPosition?.x ?? 50, y: home.headerPosition?.y ?? 50 };
+      btn.textContent = '위치 저장';
+      img.style.cursor = 'grab';
+      showToast('이미지를 드래그해서 위치를 맞춘 뒤 "위치 저장"을 눌러주세요.', 'success');
+
+      let dragging = false;
+      const onDown = (e) => {
+        dragging = true;
+        img.style.cursor = 'grabbing';
+        e.preventDefault();
+      };
+      const onMove = (e) => {
+        if (!dragging) return;
+        const rect = img.getBoundingClientRect();
+        headerDragPosition = {
+          x: Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100)),
+          y: Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100))
+        };
+        img.style.objectPosition = `${headerDragPosition.x}% ${headerDragPosition.y}%`;
+      };
+      const onUp = () => {
+        dragging = false;
+        img.style.cursor = 'grab';
+      };
+
+      img.addEventListener('pointerdown', onDown);
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      headerDragCleanup = () => {
+        img.removeEventListener('pointerdown', onDown);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+    } else {
+      repositioningHeader = false;
+      if (headerDragCleanup) headerDragCleanup();
+      saveHeaderPosition(headerDragPosition);
+    }
+  }
+
+  async function saveHeaderPosition(position) {
+    try {
+      await updateProfile({ headerPosition: position });
+      home.headerPosition = position;
+      showToast('저장했어요.', 'success');
+    } catch (err) {
+      showToast(err.message || '저장에 실패했습니다.', 'error');
+    }
+    renderShell();
   }
 
   async function enterEditMode(page) {
