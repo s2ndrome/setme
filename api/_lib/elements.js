@@ -1,4 +1,4 @@
-const ALLOWED_TYPES = new Set(['text', 'image', 'box', 'button']);
+const ALLOWED_TYPES = new Set(['text', 'image', 'box', 'button', 'widget']);
 const MAX_ELEMENTS = 300;
 const MAX_JSON_BYTES = 20_000; // per content/style blob
 

@@ -16,6 +16,376 @@ function safeHref(href) {
   return /^(https?:|mailto:|tel:)/i.test(value) ? value : '';
 }
 
+function safeColor(value, fallback) {
+  return /^#[0-9a-fA-F]{6}$/.test(value) ? value : fallback;
+}
+
+function ddayDiff(targetDate) {
+  if (!targetDate) return 'D-DAY';
+  const target = new Date(`${targetDate}T00:00:00`);
+  if (Number.isNaN(target.getTime())) return 'D-DAY';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((target - today) / 86400000);
+  if (diffDays === 0) return 'D-DAY';
+  return diffDays > 0 ? `D-${diffDays}` : `D+${Math.abs(diffDays)}`;
+}
+
+function linesOf(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+const WIDGETS = {
+  dday: {
+    label: '디데이',
+    width: 200,
+    height: 100,
+    content: { label: 'D-DAY', targetDate: '' },
+    style: {},
+    render(content) {
+      return `
+        <div class="w-dday">
+          <div class="w-dday-label">${escapeHtml(content.label || 'D-DAY')}</div>
+          <div class="w-dday-value">${escapeHtml(ddayDiff(content.targetDate))}</div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>제목
+          <input type="text" data-field="content.label" value="${escapeHtml(content.label || '')}">
+        </label>
+        <label>날짜
+          <input type="date" data-field="content.targetDate" value="${escapeHtml(content.targetDate || '')}">
+        </label>
+      `;
+    }
+  },
+  divider: {
+    label: '구분선',
+    width: 300,
+    height: 20,
+    content: {},
+    style: { color: '#e5e5e2', thickness: 2 },
+    render(content, style) {
+      const thickness = Number(style.thickness) || 2;
+      const color = safeColor(style.color, '#e5e5e2');
+      return `<div class="w-divider" style="border-top:${thickness}px solid ${color}"></div>`;
+    },
+    fields(content, style) {
+      return `
+        <label>색
+          <input type="color" data-field="style.color" value="${safeColor(style.color, '#e5e5e2')}">
+        </label>
+        <label>두께
+          <input type="number" min="1" max="20" data-field="style.thickness" value="${Number(style.thickness) || 2}">
+        </label>
+      `;
+    }
+  },
+  preference: {
+    label: '성향표 (호불호)',
+    width: 320,
+    height: 220,
+    content: { likeTitle: 'LIKE', hateTitle: 'HATE', likes: '', hates: '' },
+    style: {},
+    render(content) {
+      const likes = linesOf(content.likes);
+      const hates = linesOf(content.hates);
+      return `
+        <div class="w-pref">
+          <div class="w-pref-col">
+            <h4>${escapeHtml(content.likeTitle || 'LIKE')}</h4>
+            <ul>${likes.map((t) => `<li>♥ ${escapeHtml(t)}</li>`).join('')}</ul>
+          </div>
+          <div class="w-pref-col">
+            <h4>${escapeHtml(content.hateTitle || 'HATE')}</h4>
+            <ul>${hates.map((t) => `<li>✕ ${escapeHtml(t)}</li>`).join('')}</ul>
+          </div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>LIKE 제목
+          <input type="text" data-field="content.likeTitle" value="${escapeHtml(content.likeTitle || '')}">
+        </label>
+        <label>LIKE 목록 (줄바꿈으로 구분)
+          <textarea data-field="content.likes" rows="3">${escapeHtml(content.likes || '')}</textarea>
+        </label>
+        <label>HATE 제목
+          <input type="text" data-field="content.hateTitle" value="${escapeHtml(content.hateTitle || '')}">
+        </label>
+        <label>HATE 목록 (줄바꿈으로 구분)
+          <textarea data-field="content.hates" rows="3">${escapeHtml(content.hates || '')}</textarea>
+        </label>
+      `;
+    }
+  },
+  friends: {
+    label: '친구 링크',
+    width: 320,
+    height: 200,
+    content: { title: 'FRIENDS', items: '' },
+    style: {},
+    render(content) {
+      const items = linesOf(content.items).map((line) => {
+        const [label, href] = line.split('|').map((s) => (s || '').trim());
+        return { label: label || line, href: safeHref(href) };
+      });
+      return `
+        <div class="w-friends">
+          <h4>${escapeHtml(content.title || 'FRIENDS')}</h4>
+          <div class="w-friends-grid">
+            ${items
+              .map((item) =>
+                item.href
+                  ? `<a class="w-friend" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">${escapeHtml(item.label)}</a>`
+                  : `<span class="w-friend">${escapeHtml(item.label)}</span>`
+              )
+              .join('')}
+          </div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <label>친구 목록 (한 줄에 "이름|https://링크")
+          <textarea data-field="content.items" rows="5" placeholder="이름|https://example.com">${escapeHtml(content.items || '')}</textarea>
+        </label>
+      `;
+    }
+  },
+  collapse: {
+    label: '접은글',
+    width: 320,
+    height: 140,
+    content: { title: '더보기', body: '' },
+    style: {},
+    render(content) {
+      return `
+        <details class="w-collapse">
+          <summary>${escapeHtml(content.title || '더보기')}</summary>
+          <div class="w-collapse-body">${escapeHtml(content.body || '')}</div>
+        </details>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>제목 (접혔을 때 보이는 글자)
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <label>내용 (펼치면 보이는 글자)
+          <textarea data-field="content.body" rows="4">${escapeHtml(content.body || '')}</textarea>
+        </label>
+      `;
+    }
+  },
+  gallery: {
+    label: '갤러리',
+    width: 320,
+    height: 240,
+    content: { images: [] },
+    style: {},
+    render(content) {
+      const images = Array.isArray(content.images) ? content.images : [];
+      if (images.length === 0) return `<div class="ce-placeholder">이미지를 추가해주세요</div>`;
+      return `<div class="w-gallery">${images.map((src) => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`;
+    },
+    fields() {
+      return `<div id="galleryFields"></div>`;
+    }
+  },
+  guestbook: {
+    label: '방명록 바로가기',
+    width: 260,
+    height: 100,
+    content: { title: '방명록', href: '' },
+    style: {},
+    render(content) {
+      const href = safeHref(content.href);
+      const label = escapeHtml(content.title || '방명록');
+      return href
+        ? `<a class="w-guestbook" href="${escapeHtml(href)}" target="_blank" rel="noopener">${label}<span>남기러 가기 →</span></a>`
+        : `<div class="w-guestbook">${label}<span>방명록 페이지를 먼저 만들어주세요</span></div>`;
+    },
+    fields(content) {
+      return `
+        <label>제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <p class="editor-panel-empty">메뉴 관리에서 방명록 페이지를 만들면 자동으로 연결돼요.</p>
+      `;
+    }
+  },
+  music: {
+    label: '음악',
+    width: 280,
+    height: 90,
+    content: { title: '', artist: '', audioUrl: '' },
+    style: {},
+    render(content) {
+      const src = safeHref(content.audioUrl) || (content.audioUrl || '').trim();
+      return `
+        <div class="w-music">
+          <div class="w-music-info">
+            <div class="w-music-title">${escapeHtml(content.title || '재생할 곡을 등록해주세요')}</div>
+            <div class="w-music-artist">${escapeHtml(content.artist || '')}</div>
+          </div>
+          ${src ? `<audio controls src="${escapeHtml(src)}"></audio>` : ''}
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>곡 제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <label>아티스트
+          <input type="text" data-field="content.artist" value="${escapeHtml(content.artist || '')}">
+        </label>
+        <label>오디오 링크
+          <input type="text" data-field="content.audioUrl" value="${escapeHtml(content.audioUrl || '')}" placeholder="https://... 또는 업로드">
+        </label>
+        <button class="btn btn-ghost" data-upload-audio="1">오디오 업로드 (3MB 이하)</button>
+      `;
+    }
+  },
+  rating: {
+    label: '별점 카드',
+    width: 260,
+    height: 120,
+    content: { title: '', subtitle: '', rating: 4, imageSrc: '' },
+    style: {},
+    render(content) {
+      const rating = Math.min(5, Math.max(0, Number(content.rating) || 0));
+      const stars = Array.from({ length: 5 }, (_, i) => {
+        const filled = i + 1 <= rating;
+        const half = !filled && i + 0.5 <= rating;
+        return `<span class="w-star ${filled ? 'full' : half ? 'half' : ''}">★</span>`;
+      }).join('');
+      const image = content.imageSrc
+        ? `<img class="w-rating-img" src="${escapeHtml(content.imageSrc)}" alt="">`
+        : '';
+      return `
+        <div class="w-rating">
+          ${image}
+          <div class="w-rating-body">
+            <div class="w-rating-title">${escapeHtml(content.title || '제목')}</div>
+            <div class="w-rating-stars">${stars} <span class="w-rating-num">${rating.toFixed(1)}</span></div>
+            <div class="w-rating-subtitle">${escapeHtml(content.subtitle || '')}</div>
+          </div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <label>부제/설명
+          <input type="text" data-field="content.subtitle" value="${escapeHtml(content.subtitle || '')}">
+        </label>
+        <label>별점 (0~5, 0.5 단위)
+          <input type="number" min="0" max="5" step="0.5" data-field="content.rating" value="${Number(content.rating) || 0}">
+        </label>
+        <button class="btn btn-ghost" data-upload="1">${content.imageSrc ? '썸네일 바꾸기' : '썸네일 업로드'}</button>
+        ${content.imageSrc ? `<img class="editor-panel-preview" src="${escapeHtml(content.imageSrc)}" alt="">` : ''}
+      `;
+    }
+  },
+  progress: {
+    label: '진행률 바',
+    width: 280,
+    height: 60,
+    content: { label: '진행률', percent: 50 },
+    style: { color: '#5b5bf0' },
+    render(content, style) {
+      const percent = Math.min(100, Math.max(0, Number(content.percent) || 0));
+      const color = safeColor(style.color, '#5b5bf0');
+      return `
+        <div class="w-progress">
+          <div class="w-progress-head">
+            <span>${escapeHtml(content.label || '')}</span>
+            <span>${percent}%</span>
+          </div>
+          <div class="w-progress-track"><div class="w-progress-fill" style="width:${percent}%;background:${color}"></div></div>
+        </div>
+      `;
+    },
+    fields(content, style) {
+      return `
+        <label>라벨
+          <input type="text" data-field="content.label" value="${escapeHtml(content.label || '')}">
+        </label>
+        <label>진행률 (%)
+          <input type="number" min="0" max="100" data-field="content.percent" value="${Number(content.percent) || 0}">
+        </label>
+        <label>색상
+          <input type="color" data-field="style.color" value="${safeColor(style.color, '#5b5bf0')}">
+        </label>
+      `;
+    }
+  },
+  donut: {
+    label: '도넛 차트',
+    width: 260,
+    height: 260,
+    content: { segments: '' },
+    style: {},
+    render(content) {
+      const palette = ['#f76c6c', '#ffd166', '#4ade80', '#60a5fa', '#a78bfa', '#f472b6'];
+      const rows = linesOf(content.segments)
+        .map((line) => {
+          const [label, valueRaw] = line.split('|').map((s) => (s || '').trim());
+          const value = Number(valueRaw);
+          return { label: label || line, value: Number.isFinite(value) ? Math.max(0, value) : 0 };
+        })
+        .filter((row) => row.value > 0);
+      const total = rows.reduce((sum, row) => sum + row.value, 0);
+      if (total === 0) return `<div class="ce-placeholder">항목을 추가해주세요</div>`;
+
+      let cumulative = 0;
+      const stops = rows
+        .map((row, i) => {
+          const start = (cumulative / total) * 360;
+          cumulative += row.value;
+          const end = (cumulative / total) * 360;
+          return `${palette[i % palette.length]} ${start}deg ${end}deg`;
+        })
+        .join(', ');
+
+      const legend = rows
+        .map(
+          (row, i) => `
+        <li><span class="w-donut-swatch" style="background:${palette[i % palette.length]}"></span>${escapeHtml(row.label)} <b>${Math.round((row.value / total) * 100)}%</b></li>
+      `
+        )
+        .join('');
+
+      return `
+        <div class="w-donut">
+          <div class="w-donut-ring" style="background:conic-gradient(${stops})"></div>
+          <ul class="w-donut-legend">${legend}</ul>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>항목 (한 줄에 "라벨|값")
+          <textarea data-field="content.segments" rows="5" placeholder="독서|30&#10;운동|20&#10;게임|50">${escapeHtml(content.segments || '')}</textarea>
+        </label>
+      `;
+    }
+  }
+};
+
 export function applyBackground(el, background) {
   const bg = background || { type: 'color', value: '#f5f5f5' };
   el.style.backgroundImage = '';
@@ -68,6 +438,11 @@ function elementBodyHTML(el) {
         ? `<a class="ce-button" href="${escapeHtml(href)}" target="_blank" rel="noopener" style="${styleAttr}">${label}</a>`
         : `<div class="ce-button" style="${styleAttr}">${label}</div>`;
     }
+    case 'widget': {
+      const def = WIDGETS[content.widgetKind];
+      if (!def) return '';
+      return `<div class="ce-widget">${def.render(content, style)}</div>`;
+    }
     default:
       return '';
   }
@@ -102,7 +477,7 @@ const ELEMENT_DEFAULTS = {
   button: { width: 160, height: 48, content: { label: '버튼', href: '' }, style: { background: '#5b5bf0', color: '#ffffff' } }
 };
 
-export function mountEditor({ container, pageId, background, elements: initialElements, onExit }) {
+export function mountEditor({ container, pageId, background, elements: initialElements, guestbookHref, onExit }) {
   const state = {
     background: background ? { ...background } : { type: 'color', value: '#f5f5f5' },
     elements: (initialElements || []).map((el) => ({ ...el, id: el.id || genId() })),
@@ -118,6 +493,12 @@ export function mountEditor({ container, pageId, background, elements: initialEl
           <button class="btn btn-ghost" data-add="image">+이미지</button>
           <button class="btn btn-ghost" data-add="box">+박스</button>
           <button class="btn btn-ghost" data-add="button">+버튼</button>
+          <select id="widgetSelect">
+            <option value="">+위젯</option>
+            ${Object.entries(WIDGETS)
+              .map(([key, def]) => `<option value="${key}">${escapeHtml(def.label)}</option>`)
+              .join('')}
+          </select>
           <button class="btn btn-ghost" id="bgBtn">배경</button>
         </div>
         <div class="editor-toolbar-group">
@@ -352,6 +733,12 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     panel.querySelectorAll('[data-upload]').forEach((btn) => {
       btn.addEventListener('click', () => triggerImageUpload(el));
     });
+    panel.querySelectorAll('[data-upload-audio]').forEach((btn) => {
+      btn.addEventListener('click', () => triggerAudioUpload(el));
+    });
+    if (el.type === 'widget' && el.content?.widgetKind === 'gallery') {
+      renderGalleryFields(el);
+    }
   }
 
   function elementFieldsHTML(el) {
@@ -418,7 +805,66 @@ export function mountEditor({ container, pageId, background, elements: initialEl
         </label>
       `;
     }
+    if (el.type === 'widget') {
+      const def = WIDGETS[content.widgetKind];
+      return def ? def.fields(content, style) : '';
+    }
     return '';
+  }
+
+  function renderGalleryFields(el) {
+    const images = Array.isArray(el.content.images) ? el.content.images : [];
+    const wrap = panel.querySelector('#galleryFields');
+    if (!wrap) return;
+    wrap.innerHTML = `
+      <div class="board-editor-images">
+        ${images
+          .map(
+            (src, i) =>
+              `<div class="board-editor-image"><img src="${escapeHtml(src)}" alt=""><button type="button" data-remove-gallery="${i}">✕</button></div>`
+          )
+          .join('')}
+      </div>
+      <button type="button" class="btn btn-ghost" data-add-gallery="1">이미지 추가</button>
+    `;
+    wrap.querySelectorAll('[data-remove-gallery]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        images.splice(Number(btn.dataset.removeGallery), 1);
+        el.content = { ...el.content, images };
+        renderGalleryFields(el);
+        refreshElementBody(el);
+        markDirty();
+      });
+    });
+    wrap.querySelector('[data-add-gallery]').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+      input.addEventListener('change', async () => {
+        const file = input.files[0];
+        if (!file) return;
+        if (file.size > MAX_UPLOAD_BYTES) {
+          showToast('이미지 용량은 3MB 이하만 가능합니다.', 'error');
+          return;
+        }
+        try {
+          const url = await uploadImage(file);
+          images.push(url);
+          el.content = { ...el.content, images };
+          renderGalleryFields(el);
+          refreshElementBody(el);
+          markDirty();
+        } catch (err) {
+          showToast(err.message || '업로드에 실패했습니다.', 'error');
+        }
+      });
+      input.click();
+    });
+  }
+
+  function refreshElementBody(el) {
+    const node = stage.querySelector(`.editor-element[data-id="${el.id}"]`);
+    if (node) renderBody(node, el);
   }
 
   function updateField(el, input) {
@@ -466,6 +912,30 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     input.click();
   }
 
+  async function triggerAudioUpload(el) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/mpeg,audio/ogg,audio/wav,audio/mp4,.mp3,.ogg,.wav,.m4a';
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        showToast('오디오 용량은 3MB 이하만 가능합니다.', 'error');
+        return;
+      }
+      try {
+        const url = await uploadImage(file);
+        el.content = { ...(el.content || {}), audioUrl: url };
+        refreshElementBody(el);
+        renderPanel();
+        markDirty();
+      } catch (err) {
+        showToast(err.message || '업로드에 실패했습니다.', 'error');
+      }
+    });
+    input.click();
+  }
+
   function reorder(el, direction) {
     const zs = state.elements.map((e) => e.zIndex);
     el.zIndex = direction === 'front' ? Math.max(0, ...zs) + 1 : Math.min(0, ...zs) - 1;
@@ -480,7 +950,14 @@ export function mountEditor({ container, pageId, background, elements: initialEl
   }
 
   function duplicateElement(el) {
-    const copy = { ...el, id: genId(), x: el.x + 20, y: el.y + 20 };
+    const copy = {
+      ...el,
+      id: genId(),
+      x: el.x + 20,
+      y: el.y + 20,
+      content: structuredClone(el.content),
+      style: structuredClone(el.style)
+    };
     state.elements.push(copy);
     renderElements();
     selectElement(copy.id);
@@ -495,22 +972,38 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     markDirty();
   }
 
-  function addElement(type) {
-    const defaults = ELEMENT_DEFAULTS[type];
-    if (!defaults) return;
+  function addElement(type, widgetKind) {
+    let width, height, content, style;
+    if (type === 'widget') {
+      const def = WIDGETS[widgetKind];
+      if (!def) return;
+      width = def.width;
+      height = def.height;
+      content = { ...structuredClone(def.content), widgetKind };
+      if (widgetKind === 'guestbook') content.href = guestbookHref || '';
+      style = structuredClone(def.style);
+    } else {
+      const defaults = ELEMENT_DEFAULTS[type];
+      if (!defaults) return;
+      ({ width, height } = defaults);
+      content = { ...defaults.content };
+      style = { ...defaults.style };
+    }
+
     const maxZ = Math.max(0, ...state.elements.map((e) => e.zIndex));
     const el = {
       id: genId(),
       type,
       x: 60 + Math.random() * 60,
       y: 60 + Math.random() * 60,
+      width,
+      height,
       rotation: 0,
       zIndex: maxZ + 1,
       visible: true,
       opacity: 1,
-      ...defaults,
-      content: { ...defaults.content },
-      style: { ...defaults.style }
+      content,
+      style
     };
     state.elements.push(el);
     renderElements();
@@ -520,6 +1013,13 @@ export function mountEditor({ container, pageId, background, elements: initialEl
 
   container.querySelectorAll('[data-add]').forEach((btn) => {
     btn.addEventListener('click', () => addElement(btn.dataset.add));
+  });
+
+  container.querySelector('#widgetSelect').addEventListener('change', (e) => {
+    const kind = e.target.value;
+    if (!kind) return;
+    addElement('widget', kind);
+    e.target.value = '';
   });
 
   function openBackgroundPanel() {

@@ -296,11 +296,15 @@ export async function renderHome(container, { username, pageSlug }) {
       showToast('페이지를 불러오지 못했습니다.', 'error');
       return;
     }
+    const guestbookPage = pages.find((p) => p.kind === 'guestbook');
+    const guestbookHref = guestbookPage ? `/@${username}/p/${guestbookPage.slug}` : '';
+
     mountEditor({
       container,
       pageId: elementsData.pageId,
       background: home.background,
       elements: elementsData.elements,
+      guestbookHref,
       onExit: (savedElements, savedBackground) => {
         home.background = savedBackground;
         renderShell();
