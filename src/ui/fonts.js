@@ -1,7 +1,7 @@
 export const FONT_PRESETS = {
   pretendard: {
     label: 'Pretendard (기본)',
-    family: "'Pretendard Variable', Pretendard, -apple-system, sans-serif",
+    family: "'Pretendard', -apple-system, sans-serif",
     href: ''
   },
   noto: {
