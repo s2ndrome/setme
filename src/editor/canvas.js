@@ -286,7 +286,7 @@ const WIDGETS = {
         <label>배치 형식
           <select data-field="content.layout">
             <option value="grid2" ${layout === 'grid2' ? 'selected' : ''}>카드형 (2열)</option>
-            <option value="row" ${layout === 'row' ? 'selected' : ''}>가로 나열형</option>
+            <option value="row" ${layout === 'row' ? 'selected' : ''}>세로 나열형</option>
             <option value="strip" ${layout === 'strip' ? 'selected' : ''}>아이콘 배너형 (88x31)</option>
           </select>
         </label>
