@@ -4,6 +4,7 @@ import { getHomeMeta, canView } from './_lib/home.js';
 
 const MAX_PAGES = 20;
 const KINDS = new Set(['canvas', 'board', 'guestbook']);
+const LIST_STYLES = new Set(['list', 'gallery']);
 
 function slugify(name) {
   const base = String(name || '')
@@ -31,7 +32,7 @@ async function handleGet(req, res) {
   }
 
   const pages = await sql`
-    select id, name, slug, kind, order_index, is_default
+    select id, name, slug, kind, order_index, is_default, list_style
     from pages where uid = ${home.id}
     order by order_index asc
   `;
@@ -45,7 +46,8 @@ async function handleGet(req, res) {
       slug: p.slug,
       kind: p.kind,
       orderIndex: p.order_index,
-      isDefault: p.is_default
+      isDefault: p.is_default,
+      listStyle: p.list_style || 'list'
     }))
   });
 }
@@ -94,7 +96,7 @@ async function handleUpdate(req, res) {
   const uid = getUidFromRequest(req);
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const { id, name, order } = req.body || {};
+  const { id, name, order, listStyle } = req.body || {};
 
   if (Array.isArray(order) && order.length > 0) {
     const queries = order.map((pageId, index) =>
@@ -108,6 +110,12 @@ async function handleUpdate(req, res) {
     const cleanName = String(name).trim().slice(0, 30);
     if (!cleanName) return res.status(400).json({ error: '페이지 이름을 입력해주세요.' });
     await sql`update pages set name = ${cleanName} where id = ${id} and uid = ${uid}`;
+    return res.status(200).json({ ok: true });
+  }
+
+  if (id && listStyle !== undefined) {
+    if (!LIST_STYLES.has(listStyle)) return res.status(400).json({ error: 'invalid_list_style' });
+    await sql`update pages set list_style = ${listStyle} where id = ${id} and uid = ${uid}`;
     return res.status(200).json({ ok: true });
   }
 

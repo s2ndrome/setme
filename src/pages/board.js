@@ -1,4 +1,4 @@
-import { listPosts, getPost, createPost, updatePost, deletePost, uploadImage, getPages } from '../api/client.js';
+import { listPosts, getPost, createPost, updatePost, deletePost, uploadImage, getPages, updatePageListStyle } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 import { escapeHtml } from '../ui/escape.js';
 
@@ -29,33 +29,87 @@ export async function renderBoard(container, { username, page, isOwner }) {
       : `<span class="board-item-thumb board-item-thumb-empty"></span>`;
   }
 
-  function renderList() {
-    container.innerHTML = `
-      <div class="board">
-        ${isOwner ? `<button type="button" class="btn btn-primary" id="newPostBtn">글쓰기</button>` : ''}
-        <ul class="board-list">
-          ${data.posts.length === 0 ? `<li class="board-empty">아직 글이 없어요.</li>` : ''}
-          ${data.posts
-            .map(
-              (p) => `
-            <li class="board-item" data-id="${p.id}">
-              ${coverThumb(p)}
-              <div class="board-item-body">
-                <span class="board-item-title">${escapeHtml(p.title || '(제목 없음)')} ${p.visibility === 'private' ? '<span class="board-badge">비공개</span>' : ''}</span>
-                <span class="board-item-date">${new Date(p.createdAt).toLocaleDateString('ko-KR')}</span>
-              </div>
-            </li>
-          `
-            )
-            .join('')}
-        </ul>
+  function renderRowList() {
+    if (data.posts.length === 0) return `<p class="board-empty">아직 글이 없어요.</p>`;
+    return `
+      <ul class="board-list">
+        ${data.posts
+          .map(
+            (p) => `
+          <li class="board-item" data-id="${p.id}">
+            ${coverThumb(p)}
+            <div class="board-item-body">
+              <span class="board-item-title">${escapeHtml(p.title || '(제목 없음)')} ${p.visibility === 'private' ? '<span class="board-badge">비공개</span>' : ''}</span>
+              <span class="board-item-date">${new Date(p.createdAt).toLocaleDateString('ko-KR')}</span>
+            </div>
+          </li>
+        `
+          )
+          .join('')}
+      </ul>
+    `;
+  }
+
+  function renderGalleryGrid() {
+    if (data.posts.length === 0) return `<p class="board-empty">아직 글이 없어요.</p>`;
+    return `
+      <div class="board-gallery-grid">
+        ${data.posts
+          .map(
+            (p) => `
+          <div class="board-gallery-item" data-id="${p.id}">
+            ${
+              p.coverImage
+                ? `<img src="${escapeHtml(p.coverImage)}" alt="">`
+                : `<span class="board-gallery-empty"></span>`
+            }
+            <span class="board-gallery-title">${escapeHtml(p.title || '(제목 없음)')} ${p.visibility === 'private' ? '<span class="board-badge">비공개</span>' : ''}</span>
+          </div>
+        `
+          )
+          .join('')}
       </div>
     `;
-    container.querySelectorAll('.board-item').forEach((li) => {
-      li.addEventListener('click', () => renderDetail(li.dataset.id));
+  }
+
+  function renderList() {
+    const isGallery = page.listStyle === 'gallery';
+    container.innerHTML = `
+      <div class="board">
+        <div class="board-toolbar">
+          ${isOwner ? `<button type="button" class="btn btn-primary" id="newPostBtn">글쓰기</button>` : '<span></span>'}
+          ${
+            isOwner
+              ? `
+            <div class="board-style-toggle">
+              <button type="button" class="board-style-btn ${!isGallery ? 'active' : ''}" data-style="list">목록형</button>
+              <button type="button" class="board-style-btn ${isGallery ? 'active' : ''}" data-style="gallery">갤러리형</button>
+            </div>
+          `
+              : ''
+          }
+        </div>
+        ${isGallery ? renderGalleryGrid() : renderRowList()}
+      </div>
+    `;
+    container.querySelectorAll('.board-item, .board-gallery-item').forEach((el) => {
+      el.addEventListener('click', () => renderDetail(el.dataset.id));
     });
     if (isOwner) {
       container.querySelector('#newPostBtn').addEventListener('click', () => openEditor(null));
+      container.querySelectorAll('[data-style]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const style = btn.dataset.style;
+          if (style === page.listStyle) return;
+          try {
+            await updatePageListStyle(page.id, style);
+            page.listStyle = style;
+            renderList();
+          } catch (err) {
+            showToast(err.message || '변경에 실패했습니다.', 'error');
+          }
+        });
+      });
     }
   }
 

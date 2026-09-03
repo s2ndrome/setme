@@ -65,6 +65,10 @@ export function reorderPages(orderIds) {
   return request('/pages', { method: 'PUT', body: { order: orderIds } });
 }
 
+export function updatePageListStyle(id, listStyle) {
+  return request('/pages', { method: 'PUT', body: { id, listStyle } });
+}
+
 export function deletePage(id) {
   return request(`/pages?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
