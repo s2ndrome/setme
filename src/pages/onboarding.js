@@ -1,5 +1,6 @@
 import { createUserProfile, isValidUsername, isUsernameAvailable } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
+import { applyCustomCss } from '../ui/customCss.js';
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -11,6 +12,8 @@ function withTimeout(promise, ms) {
 }
 
 export function renderOnboarding(container, { currentUser }) {
+  applyCustomCss('');
+
   container.innerHTML = `
     <section class="auth-form">
       <h1>프로필 설정</h1>

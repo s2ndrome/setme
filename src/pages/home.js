@@ -15,6 +15,7 @@ import { renderBoard } from './board.js';
 import { renderGuestbook } from './guestbook.js';
 import { showToast } from '../ui/toast.js';
 import { escapeHtml } from '../ui/escape.js';
+import { applyCustomCss } from '../ui/customCss.js';
 
 const KIND_LABEL = { canvas: '자유 페이지', board: '게시판', guestbook: '방명록' };
 
@@ -94,6 +95,8 @@ export async function renderHome(container, { username, pageSlug }) {
       return;
     }
 
+    applyCustomCss(home.customCss || '');
+
     container.innerHTML = `
       <section class="home-view">
         <header class="home-topbar">
@@ -103,6 +106,7 @@ export async function renderHome(container, { username, pageSlug }) {
               ? `
             <div class="home-topbar-actions">
               ${page.kind === 'canvas' ? `<button class="btn btn-ghost" id="editModeBtn">꾸미기 모드</button>` : ''}
+              <button class="btn btn-ghost" id="customCssBtn">CSS 편집</button>
               <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
             </div>
           `
@@ -145,6 +149,7 @@ export async function renderHome(container, { username, pageSlug }) {
         window.location.assign('/');
       });
       container.querySelector('#managePagesBtn').addEventListener('click', openPagesManager);
+      container.querySelector('#customCssBtn').addEventListener('click', openCustomCssEditor);
       const editBtn = container.querySelector('#editModeBtn');
       if (editBtn) editBtn.addEventListener('click', () => enterEditMode(page));
 
@@ -230,6 +235,47 @@ export async function renderHome(container, { username, pageSlug }) {
         home.background = savedBackground;
         renderShell();
       }
+    });
+  }
+
+  function openCustomCssEditor() {
+    const savedCss = home.customCss || '';
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="modal-box">
+        <h3>커스텀 CSS</h3>
+        <p class="auth-switch">내 개인홈을 볼 때만 적용돼요. 다른 사람 페이지나 사이트 다른 곳엔 영향 없어요.</p>
+        <textarea id="customCssInput" rows="12" spellcheck="false" placeholder=".profile-bio { color: hotpink; }">${escapeHtml(savedCss)}</textarea>
+        <div class="board-editor-actions">
+          <button type="button" class="btn btn-primary" id="customCssSaveBtn">저장</button>
+          <button type="button" class="btn btn-ghost" id="customCssCancelBtn">취소</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    const input = modal.querySelector('#customCssInput');
+    input.addEventListener('input', () => applyCustomCss(input.value));
+
+    function close() {
+      applyCustomCss(home.customCss || '');
+      modal.remove();
+    }
+
+    modal.querySelector('#customCssSaveBtn').addEventListener('click', async () => {
+      try {
+        await updateProfile({ customCss: input.value });
+        home.customCss = input.value;
+        showToast('저장했어요.', 'success');
+        modal.remove();
+      } catch (err) {
+        showToast(err.message || '저장에 실패했습니다.', 'error');
+      }
+    });
+    modal.querySelector('#customCssCancelBtn').addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) close();
     });
   }
 

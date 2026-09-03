@@ -1,7 +1,10 @@
 import { signUp, signIn } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
+import { applyCustomCss } from '../ui/customCss.js';
 
 export function renderLanding(container, { currentUser, profile }) {
+  applyCustomCss('');
+
   if (currentUser && profile) {
     container.innerHTML = `
       <section class="landing">
