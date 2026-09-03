@@ -7,12 +7,19 @@ import { sanitizeElements } from './_lib/elements.js';
 // actual image/title is looked up fresh on every read, so if that person
 // changes their banner later it updates everywhere it's embedded without
 // needing to touch the pages that embed it.
+function bannerHandlesOf(content) {
+  const raw = content?.handles || content?.username || '';
+  return String(raw)
+    .split('\n')
+    .map((h) => h.trim().toLowerCase().replace(/^@/, ''))
+    .filter(Boolean);
+}
+
 async function resolveBanners(elementRows) {
   const handles = new Set();
   for (const el of elementRows) {
     if (el.type === 'widget' && el.content?.widgetKind === 'banner') {
-      const handle = String(el.content.username || '').trim().toLowerCase().replace(/^@/, '');
-      if (handle) handles.add(handle);
+      bannerHandlesOf(el.content).forEach((h) => handles.add(h));
     }
   }
   if (handles.size === 0) return new Map();
@@ -78,8 +85,11 @@ async function handleGet(req, res) {
         style: el.style
       };
       if (el.type === 'widget' && el.content?.widgetKind === 'banner') {
-        const handle = String(el.content.username || '').trim().toLowerCase().replace(/^@/, '');
-        base.resolved = bannerMap.get(handle) || { found: false };
+        const resolved = {};
+        for (const handle of bannerHandlesOf(el.content)) {
+          resolved[handle] = bannerMap.get(handle) || { found: false };
+        }
+        base.resolved = resolved;
       }
       return base;
     })

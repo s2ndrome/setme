@@ -41,6 +41,30 @@ function linesOf(text) {
     .filter(Boolean);
 }
 
+function bannerGridItemHTML(item) {
+  const body = item.found && item.image
+    ? `<img src="${escapeHtml(item.image)}" alt="">`
+    : `<span class="w-banner-card-empty"></span>`;
+  return `
+    <a class="w-banner-card" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">
+      ${body}
+      <span class="w-banner-card-label">${escapeHtml(item.title)}</span>
+    </a>
+  `;
+}
+
+function bannerRowItemHTML(item) {
+  return item.found && item.image
+    ? `<a class="w-banner-row-item" href="${escapeHtml(item.href)}" target="_blank" rel="noopener"><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}"></a>`
+    : `<a class="w-banner-row-item w-banner-row-empty" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">${escapeHtml(item.title)}</a>`;
+}
+
+function bannerStripItemHTML(item) {
+  return item.found && item.image
+    ? `<a class="w-banner-strip-item" href="${escapeHtml(item.href)}" target="_blank" rel="noopener"><img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.title)}"></a>`
+    : `<a class="w-banner-strip-item w-banner-strip-empty" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">@${escapeHtml(item.handle)}</a>`;
+}
+
 const WIDGETS = {
   dday: {
     label: '디데이',
@@ -218,29 +242,58 @@ const WIDGETS = {
     }
   },
   banner: {
-    label: '배너 (친구 배너)',
-    width: 88,
-    height: 31,
-    content: { username: '' },
+    label: '배너 목록 (친구 배너)',
+    width: 320,
+    height: 240,
+    content: { title: 'FRIENDS', layout: 'grid2', handles: '' },
     style: {},
     render(content, style, el) {
-      const username = String(content.username || '').trim().replace(/^@/, '');
-      if (!username) return `<div class="ce-placeholder">핸들을 입력해주세요</div>`;
-      const resolved = el?.resolved;
-      const href = `/@${encodeURIComponent(username)}`;
-      if (!resolved || !resolved.found) {
-        return `<div class="w-banner-empty">@${escapeHtml(username)}<span>배너 없음</span></div>`;
+      const handles = linesOf(content.handles).map((h) => h.trim().toLowerCase().replace(/^@/, '')).filter(Boolean);
+      if (handles.length === 0) return `<div class="ce-placeholder">핸들을 추가해주세요</div>`;
+
+      const resolvedMap = el?.resolved || {};
+      const items = handles.map((handle) => {
+        const r = resolvedMap[handle];
+        return {
+          handle,
+          found: !!r?.found,
+          image: r?.bannerImage || '',
+          title: r?.bannerTitle || `@${handle}`,
+          href: `/@${encodeURIComponent(handle)}`
+        };
+      });
+
+      const layout = ['grid2', 'row', 'strip'].includes(content.layout) ? content.layout : 'grid2';
+      if (layout === 'row') {
+        return `<div class="w-banner-list w-banner-row">${items.map(bannerRowItemHTML).join('')}</div>`;
       }
-      return resolved.bannerImage
-        ? `<a class="w-banner" href="${escapeHtml(href)}" target="_blank" rel="noopener"><img src="${escapeHtml(resolved.bannerImage)}" alt="${escapeHtml(resolved.bannerTitle || username)}"></a>`
-        : `<a class="w-banner w-banner-text" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(resolved.bannerTitle || `@${username}`)}</a>`;
+      if (layout === 'strip') {
+        return `<div class="w-banner-list w-banner-strip">${items.map(bannerStripItemHTML).join('')}</div>`;
+      }
+      return `
+        <div class="w-banner-list w-banner-grid">
+          ${content.title ? `<h4>${escapeHtml(content.title)}</h4>` : ''}
+          <div class="w-banner-grid-inner">${items.map(bannerGridItemHTML).join('')}</div>
+        </div>
+      `;
     },
     fields(content) {
+      const layout = content.layout || 'grid2';
       return `
-        <label>핸들 (@ 없이)
-          <input type="text" data-field="content.username" value="${escapeHtml(content.username || '')}" placeholder="예: someone">
+        <label>제목 (카드형에서만 표시)
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
         </label>
-        <p class="editor-panel-empty">상대가 기본설정에서 배너를 등록해두면 자동으로 표시돼요. 저장 후 반영돼요.</p>
+        <label>배치 형식
+          <select data-field="content.layout">
+            <option value="grid2" ${layout === 'grid2' ? 'selected' : ''}>카드형 (2열)</option>
+            <option value="row" ${layout === 'row' ? 'selected' : ''}>가로 나열형</option>
+            <option value="strip" ${layout === 'strip' ? 'selected' : ''}>아이콘 배너형 (88x31)</option>
+          </select>
+        </label>
+        <label>핸들 목록 (한 줄에 하나, @ 없이)
+          <textarea data-field="content.handles" rows="5" placeholder="someone1&#10;someone2">${escapeHtml(content.handles || '')}</textarea>
+        </label>
+        <p class="editor-panel-empty">상대가 기본설정에서 배너를 등록해두면 자동으로 표시되고, 나중에 바꾸면 자동으로 반영돼요.</p>
       `;
     }
   },
