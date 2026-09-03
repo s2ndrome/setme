@@ -12,7 +12,12 @@ export function parsePath(pathname) {
   if (path === '/' || path === '') return { name: 'landing' };
   if (path === '/onboarding') return { name: 'onboarding' };
   if (path.startsWith('/@')) {
-    return { name: 'home', username: decodeURIComponent(path.slice(2)) };
+    const rest = decodeURIComponent(path.slice(2));
+    const [username, seg, slug] = rest.split('/');
+    if (seg === 'p' && slug) {
+      return { name: 'home', username, pageSlug: slug };
+    }
+    return { name: 'home', username };
   }
   return { name: 'notfound' };
 }

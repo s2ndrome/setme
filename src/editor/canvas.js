@@ -1,5 +1,6 @@
-import { saveCanvas, uploadImage } from '../api/client.js';
+import { saveBackground, savePageElements, uploadImage } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
+import { escapeHtml } from '../ui/escape.js';
 
 const MIN_SIZE = 20;
 const CANVAS_WIDTH = 900;
@@ -8,15 +9,6 @@ const MAX_UPLOAD_BYTES = 3 * 1024 * 1024;
 
 function genId() {
   return crypto.randomUUID ? crypto.randomUUID() : `tmp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function safeHref(href) {
@@ -110,7 +102,7 @@ const ELEMENT_DEFAULTS = {
   button: { width: 160, height: 48, content: { label: '버튼', href: '' }, style: { background: '#5b5bf0', color: '#ffffff' } }
 };
 
-export function mountEditor({ container, background, elements: initialElements, onExit }) {
+export function mountEditor({ container, pageId, background, elements: initialElements, onExit }) {
   const state = {
     background: background ? { ...background } : { type: 'color', value: '#f5f5f5' },
     elements: (initialElements || []).map((el) => ({ ...el, id: el.id || genId() })),
@@ -627,7 +619,10 @@ export function mountEditor({ container, background, elements: initialElements, 
     btn.disabled = true;
     btn.textContent = '저장 중...';
     try {
-      await saveCanvas({ background: state.background, elements: state.elements });
+      await Promise.all([
+        saveBackground(state.background),
+        savePageElements(pageId, state.elements)
+      ]);
       markClean();
       showToast('저장했어요.', 'success');
     } catch (err) {

@@ -45,8 +45,74 @@ export function getPublicProfile(username) {
   return request(`/profile?username=${encodeURIComponent(username)}`);
 }
 
-export function saveCanvas({ background, elements }) {
-  return request('/profile', { method: 'PUT', body: { background, elements } });
+export function saveBackground(background) {
+  return request('/profile', { method: 'PUT', body: { background } });
+}
+
+export function getPages(username) {
+  return request(`/pages?username=${encodeURIComponent(username)}`);
+}
+
+export function createPage(name, kind) {
+  return request('/pages', { method: 'POST', body: { name, kind } });
+}
+
+export function renamePage(id, name) {
+  return request('/pages', { method: 'PUT', body: { id, name } });
+}
+
+export function reorderPages(orderIds) {
+  return request('/pages', { method: 'PUT', body: { order: orderIds } });
+}
+
+export function deletePage(id) {
+  return request(`/pages?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function getPageElements(username, slug) {
+  const q = slug ? `&page=${encodeURIComponent(slug)}` : '';
+  return request(`/elements?username=${encodeURIComponent(username)}${q}`);
+}
+
+export function savePageElements(pageId, elements) {
+  return request('/elements', { method: 'PUT', body: { pageId, elements } });
+}
+
+export function listPosts(username, { page, limit } = {}) {
+  const params = new URLSearchParams({ username });
+  if (page) params.set('page', page);
+  if (limit) params.set('limit', limit);
+  return request(`/posts?${params.toString()}`);
+}
+
+export function getPost(username, id) {
+  return request(`/posts?username=${encodeURIComponent(username)}&id=${encodeURIComponent(id)}`);
+}
+
+export function createPost(data) {
+  return request('/posts', { method: 'POST', body: data });
+}
+
+export function updatePost(data) {
+  return request('/posts', { method: 'PUT', body: data });
+}
+
+export function deletePost(id) {
+  return request(`/posts?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
+export function listGuestbook(username, limit) {
+  const params = new URLSearchParams({ username });
+  if (limit) params.set('limit', limit);
+  return request(`/guestbook?${params.toString()}`);
+}
+
+export function postGuestbook(username, author, content) {
+  return request('/guestbook', { method: 'POST', body: { username, author, content } });
+}
+
+export function deleteGuestbookEntry(id) {
+  return request(`/guestbook?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
 }
 
 export function uploadImage(file) {

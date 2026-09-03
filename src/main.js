@@ -46,7 +46,7 @@ function render() {
       renderOnboarding(app, { currentUser });
       break;
     case 'home':
-      renderHome(app, { username: route.username });
+      renderHome(app, { username: route.username, pageSlug: route.pageSlug });
       break;
     default:
       app.innerHTML = `<section class="empty-state"><h1>404</h1><p>페이지를 찾을 수 없습니다.</p></section>`;
