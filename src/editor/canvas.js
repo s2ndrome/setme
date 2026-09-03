@@ -639,11 +639,13 @@ function elementBodyHTML(el) {
 function wrapperStyle(el) {
   const rounded = !!el.style?.rounded;
   const blockOn = !!el.style?.blockBg;
+  const shadowOn = !!el.style?.shadow;
   return {
     borderRadius: rounded ? '16px' : '0px',
     overflow: rounded || blockOn ? 'hidden' : 'visible',
     background: blockOn ? safeColor(el.style.blockColor, '#ffffff') : 'transparent',
-    padding: blockOn ? '12px' : '0'
+    padding: blockOn ? '12px' : '0',
+    boxShadow: shadowOn ? '0 10px 28px rgba(20, 20, 30, 0.22)' : 'none'
   };
 }
 
@@ -656,6 +658,9 @@ export function renderStaticCanvas(mount, { background, elements }) {
     const node = document.createElement('div');
     node.className = 'canvas-element';
     const wrap = wrapperStyle(el);
+    // box-shadow lives on the outer node (unclipped) while radius/overflow
+    // clip only the inner body — putting both on one element would let
+    // overflow:hidden clip the shadow away.
     Object.assign(node.style, {
       left: `${el.x}px`,
       top: `${el.y}px`,
@@ -664,13 +669,19 @@ export function renderStaticCanvas(mount, { background, elements }) {
       transform: `rotate(${el.rotation || 0}deg)`,
       opacity: el.opacity ?? 1,
       zIndex: el.zIndex ?? 0,
+      boxShadow: wrap.boxShadow
+    });
+    const body = document.createElement('div');
+    body.className = 'ce-body';
+    Object.assign(body.style, {
       borderRadius: wrap.borderRadius,
       overflow: wrap.overflow,
       background: wrap.background,
       padding: wrap.padding,
       boxSizing: 'border-box'
     });
-    node.innerHTML = elementBodyHTML(el);
+    body.innerHTML = elementBodyHTML(el);
+    node.appendChild(body);
     mount.appendChild(node);
   }
 }
@@ -781,6 +792,7 @@ export function mountEditor({
     body.style.background = wrap.background;
     body.style.padding = wrap.padding;
     body.style.boxSizing = 'border-box';
+    node.style.boxShadow = wrap.boxShadow;
   }
 
   function buildElementNode(el) {
@@ -1240,6 +1252,9 @@ export function mountEditor({
       </label>
       <label>블록 색상
         <input type="color" value="${safeColor(el.style?.blockColor, '#ffffff')}" data-field="style.blockColor">
+      </label>
+      <label class="editor-inline-check">
+        <input type="checkbox" ${el.style?.shadow ? 'checked' : ''} data-field="style.shadow"> 그림자 효과
       </label>
       ${elementFieldsHTML(el)}
     `;
