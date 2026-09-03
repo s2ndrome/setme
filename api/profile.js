@@ -2,6 +2,9 @@ import { sql } from './_lib/db.js';
 import { getUidFromRequest } from './_lib/auth.js';
 import { sanitizeCss } from './_lib/css.js';
 import { sanitizeThemeColors } from './_lib/theme.js';
+import { sanitizeShortText, sanitizeUrl } from './_lib/text.js';
+
+const FONT_KEYS = new Set(['pretendard', 'noto', 'gowun', 'nanum', 'myeongjo', 'plex']);
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
@@ -17,7 +20,8 @@ async function handleGet(req, res) {
 
   const result = await sql`
     select u.id, u.username, u.nickname, u.bio, u.profile_image,
-           h.visibility, h.theme, h.background, h.header_image, h.header_position, h.custom_css, h.theme_colors
+           h.visibility, h.theme, h.background, h.header_image, h.header_position, h.custom_css, h.theme_colors,
+           h.site_name, h.favicon_url, h.cursor_url, h.banner_image, h.banner_title, h.font_family
     from users u
     left join homes h on h.uid = u.id
     where u.username = ${username}
@@ -46,7 +50,13 @@ async function handleGet(req, res) {
       headerImage: row.header_image || '',
       headerPosition: row.header_position || { x: 50, y: 50 },
       customCss: row.custom_css || '',
-      themeColors: row.theme_colors || {}
+      themeColors: row.theme_colors || {},
+      siteName: row.site_name || '',
+      faviconUrl: row.favicon_url || '',
+      cursorUrl: row.cursor_url || '',
+      bannerImage: row.banner_image || '',
+      bannerTitle: row.banner_title || '',
+      fontFamily: row.font_family || 'pretendard'
     },
     isOwner
   });
@@ -106,11 +116,23 @@ async function handleUpdate(req, res) {
     headerImage,
     headerPosition,
     customCss,
-    themeColors
+    themeColors,
+    siteName,
+    faviconUrl,
+    cursorUrl,
+    bannerImage,
+    bannerTitle,
+    fontFamily
   } = req.body || {};
   const cleanCustomCss = customCss !== undefined ? sanitizeCss(customCss) : undefined;
   const cleanThemeColors = themeColors !== undefined ? sanitizeThemeColors(themeColors) : undefined;
   const cleanHeaderPosition = headerPosition !== undefined ? sanitizeHeaderPosition(headerPosition) : undefined;
+  const cleanSiteName = siteName !== undefined ? sanitizeShortText(siteName, 60) : undefined;
+  const cleanFaviconUrl = faviconUrl !== undefined ? sanitizeUrl(faviconUrl) : undefined;
+  const cleanCursorUrl = cursorUrl !== undefined ? sanitizeUrl(cursorUrl) : undefined;
+  const cleanBannerImage = bannerImage !== undefined ? sanitizeUrl(bannerImage) : undefined;
+  const cleanBannerTitle = bannerTitle !== undefined ? sanitizeShortText(bannerTitle, 60) : undefined;
+  const cleanFontFamily = fontFamily !== undefined && FONT_KEYS.has(fontFamily) ? fontFamily : undefined;
 
   if (nickname !== undefined || bio !== undefined || profileImage !== undefined) {
     await sql`
@@ -129,7 +151,13 @@ async function handleUpdate(req, res) {
     headerImage !== undefined ||
     cleanHeaderPosition !== undefined ||
     cleanCustomCss !== undefined ||
-    cleanThemeColors !== undefined
+    cleanThemeColors !== undefined ||
+    cleanSiteName !== undefined ||
+    cleanFaviconUrl !== undefined ||
+    cleanCursorUrl !== undefined ||
+    cleanBannerImage !== undefined ||
+    cleanBannerTitle !== undefined ||
+    cleanFontFamily !== undefined
   ) {
     await sql`
       update homes set
@@ -140,6 +168,12 @@ async function handleUpdate(req, res) {
         header_position = coalesce(${cleanHeaderPosition ? JSON.stringify(cleanHeaderPosition) : null}::jsonb, header_position),
         custom_css = coalesce(${cleanCustomCss}, custom_css),
         theme_colors = coalesce(${cleanThemeColors ? JSON.stringify(cleanThemeColors) : null}::jsonb, theme_colors),
+        site_name = coalesce(${cleanSiteName}, site_name),
+        favicon_url = coalesce(${cleanFaviconUrl}, favicon_url),
+        cursor_url = coalesce(${cleanCursorUrl}, cursor_url),
+        banner_image = coalesce(${cleanBannerImage}, banner_image),
+        banner_title = coalesce(${cleanBannerTitle}, banner_title),
+        font_family = coalesce(${cleanFontFamily}, font_family),
         updated_at = now()
       where uid = ${uid}
     `;

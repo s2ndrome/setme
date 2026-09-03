@@ -2,6 +2,8 @@ import { createUserProfile, isValidUsername, isUsernameAvailable } from '../api/
 import { showToast } from '../ui/toast.js';
 import { applyCustomCss } from '../ui/customCss.js';
 import { resetTheme } from '../ui/theme.js';
+import { resetFont } from '../ui/fonts.js';
+import { resetSiteChrome } from '../ui/site.js';
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -15,6 +17,8 @@ function withTimeout(promise, ms) {
 export function renderOnboarding(container, { currentUser }) {
   applyCustomCss('');
   resetTheme();
+  resetFont();
+  resetSiteChrome();
 
   container.innerHTML = `
     <section class="auth-form">

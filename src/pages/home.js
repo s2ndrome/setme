@@ -16,7 +16,9 @@ import { renderGuestbook } from './guestbook.js';
 import { showToast } from '../ui/toast.js';
 import { escapeHtml } from '../ui/escape.js';
 import { applyCustomCss } from '../ui/customCss.js';
-import { THEME_PRESETS, applyTheme, resolveThemeColors } from '../ui/theme.js';
+import { applyTheme } from '../ui/theme.js';
+import { applyFont } from '../ui/fonts.js';
+import { applySiteChrome } from '../ui/site.js';
 
 const KIND_LABEL = { canvas: '자유 페이지', board: '게시판', guestbook: '방명록' };
 
@@ -102,6 +104,12 @@ export async function renderHome(container, { username, pageSlug }) {
 
     applyCustomCss(home.customCss || '');
     applyTheme(home.theme, home.themeColors);
+    applyFont(home.fontFamily || 'pretendard');
+    applySiteChrome({
+      title: home.siteName || profile.nickname || `@${profile.username}`,
+      favicon: home.faviconUrl,
+      cursor: home.cursorUrl
+    });
 
     container.innerHTML = `
       <section class="home-view">
@@ -112,8 +120,6 @@ export async function renderHome(container, { username, pageSlug }) {
               ? `
             <div class="home-topbar-actions">
               ${page.kind === 'canvas' ? `<button class="btn btn-ghost" id="editModeBtn">꾸미기 모드</button>` : ''}
-              <button class="btn btn-ghost" id="themeBtn">테마</button>
-              <button class="btn btn-ghost" id="customCssBtn">CSS 편집</button>
               <button class="btn btn-ghost" id="logoutBtn">로그아웃</button>
             </div>
           `
@@ -158,8 +164,6 @@ export async function renderHome(container, { username, pageSlug }) {
         window.location.assign('/');
       });
       container.querySelector('#managePagesBtn').addEventListener('click', openPagesManager);
-      container.querySelector('#customCssBtn').addEventListener('click', openCustomCssEditor);
-      container.querySelector('#themeBtn').addEventListener('click', openThemeEditor);
       const editBtn = container.querySelector('#editModeBtn');
       if (editBtn) editBtn.addEventListener('click', () => enterEditMode(page));
 
@@ -305,137 +309,19 @@ export async function renderHome(container, { username, pageSlug }) {
       background: home.background,
       elements: elementsData.elements,
       guestbookHref,
-      onExit: (savedElements, savedBackground) => {
-        home.background = savedBackground;
+      theme: home.theme,
+      themeColors: home.themeColors,
+      customCss: home.customCss,
+      siteName: home.siteName,
+      faviconUrl: home.faviconUrl,
+      cursorUrl: home.cursorUrl,
+      bannerImage: home.bannerImage,
+      bannerTitle: home.bannerTitle,
+      fontFamily: home.fontFamily,
+      onExit: (savedElements, savedState) => {
+        Object.assign(home, savedState);
         renderShell();
       }
-    });
-  }
-
-  function openCustomCssEditor() {
-    const savedCss = home.customCss || '';
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-box">
-        <h3>커스텀 CSS</h3>
-        <p class="auth-switch">내 개인홈을 볼 때만 적용돼요. 다른 사람 페이지나 사이트 다른 곳엔 영향 없어요.</p>
-        <textarea id="customCssInput" rows="12" spellcheck="false" placeholder=".profile-bio { color: hotpink; }">${escapeHtml(savedCss)}</textarea>
-        <div class="board-editor-actions">
-          <button type="button" class="btn btn-primary" id="customCssSaveBtn">저장</button>
-          <button type="button" class="btn btn-ghost" id="customCssCancelBtn">취소</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    const input = modal.querySelector('#customCssInput');
-    input.addEventListener('input', () => applyCustomCss(input.value));
-
-    function close() {
-      applyCustomCss(home.customCss || '');
-      modal.remove();
-    }
-
-    modal.querySelector('#customCssSaveBtn').addEventListener('click', async () => {
-      try {
-        await updateProfile({ customCss: input.value });
-        home.customCss = input.value;
-        showToast('저장했어요.', 'success');
-        modal.remove();
-      } catch (err) {
-        showToast(err.message || '저장에 실패했습니다.', 'error');
-      }
-    });
-    modal.querySelector('#customCssCancelBtn').addEventListener('click', close);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) close();
-    });
-  }
-
-  function openThemeEditor() {
-    let selectedTheme = home.theme || 'basic';
-    let overrides = { ...(home.themeColors || {}) };
-
-    const COLOR_LABELS = { bg: '배경색', surface: '박스색', primary: '포인트색', text: '기본 글자', muted: '서브 글자' };
-
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
-    modal.innerHTML = `
-      <div class="modal-box">
-        <h3>테마</h3>
-        <div class="theme-swatch-grid" id="themeSwatchGrid">
-          ${Object.entries(THEME_PRESETS)
-            .map(
-              ([key, preset]) => `
-            <button type="button" class="theme-swatch ${key === selectedTheme ? 'active' : ''}" data-theme="${key}"
-              style="background:${preset.bg};color:${preset.text};border-color:${preset.primary}">
-              ${escapeHtml(preset.label)}
-            </button>
-          `
-            )
-            .join('')}
-        </div>
-        <div class="theme-color-fields" id="themeColorFields"></div>
-        <div class="board-editor-actions">
-          <button type="button" class="btn btn-primary" id="themeSaveBtn">저장</button>
-          <button type="button" class="btn btn-ghost" id="themeCancelBtn">취소</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    function renderColorFields() {
-      const colors = resolveThemeColors(selectedTheme, overrides);
-      modal.querySelector('#themeColorFields').innerHTML = Object.keys(COLOR_LABELS)
-        .map(
-          (key) => `
-        <label class="theme-color-field">${COLOR_LABELS[key]}
-          <input type="color" data-color="${key}" value="${colors[key]}">
-        </label>
-      `
-        )
-        .join('');
-
-      modal.querySelectorAll('[data-color]').forEach((input) => {
-        input.addEventListener('input', () => {
-          overrides = { ...overrides, [input.dataset.color]: input.value };
-          applyTheme(selectedTheme, overrides);
-        });
-      });
-    }
-    renderColorFields();
-    applyTheme(selectedTheme, overrides);
-
-    modal.querySelectorAll('[data-theme]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        selectedTheme = btn.dataset.theme;
-        overrides = {};
-        modal.querySelectorAll('[data-theme]').forEach((b) => b.classList.toggle('active', b === btn));
-        renderColorFields();
-        applyTheme(selectedTheme, overrides);
-      });
-    });
-
-    function close() {
-      applyTheme(home.theme, home.themeColors);
-      modal.remove();
-    }
-
-    modal.querySelector('#themeSaveBtn').addEventListener('click', async () => {
-      try {
-        await updateProfile({ theme: selectedTheme, themeColors: overrides });
-        home.theme = selectedTheme;
-        home.themeColors = overrides;
-        showToast('저장했어요.', 'success');
-        modal.remove();
-      } catch (err) {
-        showToast(err.message || '저장에 실패했습니다.', 'error');
-      }
-    });
-    modal.querySelector('#themeCancelBtn').addEventListener('click', close);
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) close();
     });
   }
 

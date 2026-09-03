@@ -2,10 +2,14 @@ import { signUp, signIn } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 import { applyCustomCss } from '../ui/customCss.js';
 import { resetTheme } from '../ui/theme.js';
+import { resetFont } from '../ui/fonts.js';
+import { resetSiteChrome } from '../ui/site.js';
 
 export function renderLanding(container, { currentUser, profile }) {
   applyCustomCss('');
   resetTheme();
+  resetFont();
+  resetSiteChrome();
 
   if (currentUser && profile) {
     container.innerHTML = `
@@ -37,6 +41,15 @@ export function renderLanding(container, { currentUser, profile }) {
             <label>비밀번호
               <input type="password" name="password" required minlength="6" autocomplete="${mode === 'signup' ? 'new-password' : 'current-password'}">
             </label>
+            ${
+              mode === 'signup'
+                ? `
+              <label>초대 코드
+                <input type="text" name="inviteCode" autocomplete="off">
+              </label>
+            `
+                : ''
+            }
             <button type="submit" class="btn btn-primary">${mode === 'signup' ? '가입하기' : '로그인'}</button>
           </form>
           <p class="auth-switch">
@@ -59,11 +72,12 @@ export function renderLanding(container, { currentUser, profile }) {
       const data = new FormData(form);
       const email = data.get('email').trim();
       const password = data.get('password');
+      const inviteCode = data.get('inviteCode');
 
       submitBtn.disabled = true;
       try {
         if (mode === 'signup') {
-          await signUp(email, password);
+          await signUp(email, password, inviteCode);
         } else {
           await signIn(email, password);
         }

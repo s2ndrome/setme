@@ -1,6 +1,9 @@
-import { saveBackground, savePageElements, uploadImage } from '../api/client.js';
+import { savePageElements, uploadImage, updateProfile } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 import { escapeHtml } from '../ui/escape.js';
+import { applyCustomCss } from '../ui/customCss.js';
+import { THEME_PRESETS, applyTheme, resolveThemeColors } from '../ui/theme.js';
+import { FONT_PRESETS, applyFont } from '../ui/fonts.js';
 
 const MIN_SIZE = 20;
 const CANVAS_WIDTH = 900;
@@ -60,6 +63,58 @@ const WIDGETS = {
         </label>
         <label>날짜
           <input type="date" data-field="content.targetDate" value="${escapeHtml(content.targetDate || '')}">
+        </label>
+      `;
+    }
+  },
+  calendar: {
+    label: '캘린더',
+    width: 280,
+    height: 300,
+    content: { month: '', highlightDays: '' },
+    style: {},
+    render(content) {
+      const now = new Date();
+      let year = now.getFullYear();
+      let month = now.getMonth();
+      if (/^\d{4}-\d{2}$/.test(content.month || '')) {
+        const [y, m] = content.month.split('-').map(Number);
+        year = y;
+        month = m - 1;
+      }
+      const highlight = new Set(
+        String(content.highlightDays || '')
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isFinite(n) && n > 0)
+      );
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const startWeekday = new Date(year, month, 1).getDay();
+      const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+      const cells = [];
+      for (let i = 0; i < startWeekday; i++) cells.push('<span class="w-cal-cell w-cal-empty"></span>');
+      for (let d = 1; d <= daysInMonth; d++) {
+        const isToday = isCurrentMonth && d === now.getDate();
+        const isHighlight = highlight.has(d);
+        cells.push(`<span class="w-cal-cell ${isToday ? 'w-cal-today' : ''} ${isHighlight ? 'w-cal-highlight' : ''}">${d}</span>`);
+      }
+      const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+      return `
+        <div class="w-calendar">
+          <div class="w-cal-head">${year}. ${String(month + 1).padStart(2, '0')}</div>
+          <div class="w-cal-grid w-cal-weekdays">${weekdays.map((w) => `<span>${w}</span>`).join('')}</div>
+          <div class="w-cal-grid">${cells.join('')}</div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>표시할 달 (비우면 이번 달)
+          <input type="month" data-field="content.month" value="${escapeHtml(content.month || '')}">
+        </label>
+        <label>강조할 날짜 (쉼표로 구분, 예: 5,14,25)
+          <input type="text" data-field="content.highlightDays" value="${escapeHtml(content.highlightDays || '')}" placeholder="5,14,25">
         </label>
       `;
     }
@@ -162,6 +217,33 @@ const WIDGETS = {
       `;
     }
   },
+  banner: {
+    label: '배너 (친구 배너)',
+    width: 88,
+    height: 31,
+    content: { username: '' },
+    style: {},
+    render(content, style, el) {
+      const username = String(content.username || '').trim().replace(/^@/, '');
+      if (!username) return `<div class="ce-placeholder">핸들을 입력해주세요</div>`;
+      const resolved = el?.resolved;
+      const href = `/@${encodeURIComponent(username)}`;
+      if (!resolved || !resolved.found) {
+        return `<div class="w-banner-empty">@${escapeHtml(username)}<span>배너 없음</span></div>`;
+      }
+      return resolved.bannerImage
+        ? `<a class="w-banner" href="${escapeHtml(href)}" target="_blank" rel="noopener"><img src="${escapeHtml(resolved.bannerImage)}" alt="${escapeHtml(resolved.bannerTitle || username)}"></a>`
+        : `<a class="w-banner w-banner-text" href="${escapeHtml(href)}" target="_blank" rel="noopener">${escapeHtml(resolved.bannerTitle || `@${username}`)}</a>`;
+    },
+    fields(content) {
+      return `
+        <label>핸들 (@ 없이)
+          <input type="text" data-field="content.username" value="${escapeHtml(content.username || '')}" placeholder="예: someone">
+        </label>
+        <p class="editor-panel-empty">상대가 기본설정에서 배너를 등록해두면 자동으로 표시돼요. 저장 후 반영돼요.</p>
+      `;
+    }
+  },
   collapse: {
     label: '접은글',
     width: 320,
@@ -221,6 +303,56 @@ const WIDGETS = {
           <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
         </label>
         <p class="editor-panel-empty">메뉴 관리에서 방명록 페이지를 만들면 자동으로 연결돼요.</p>
+      `;
+    }
+  },
+  chat: {
+    label: '채팅 로그',
+    width: 340,
+    height: 260,
+    content: { title: 'CHAT', avatar: '', lines: '' },
+    style: {},
+    render(content) {
+      const rows = linesOf(content.lines).map((line) => {
+        const idx = line.indexOf('|');
+        const speaker = idx === -1 ? '' : line.slice(0, idx).trim();
+        const text = idx === -1 ? line : line.slice(idx + 1).trim();
+        return { speaker, text };
+      });
+      const avatar = escapeHtml(content.avatar || '');
+      const body = rows
+        .map((row) => {
+          if (!row.speaker) {
+            return `<div class="w-chat-row w-chat-row-me"><div class="w-chat-bubble w-chat-bubble-me">${escapeHtml(row.text)}</div></div>`;
+          }
+          return `
+            <div class="w-chat-row">
+              ${avatar ? `<img class="w-chat-avatar" src="${avatar}" alt="">` : `<div class="w-chat-avatar w-chat-avatar-empty"></div>`}
+              <div class="w-chat-col">
+                <div class="w-chat-name">${escapeHtml(row.speaker)}</div>
+                <div class="w-chat-bubble">${escapeHtml(row.text)}</div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+      return `
+        <div class="w-chat">
+          <div class="w-chat-title">${escapeHtml(content.title || 'CHAT')}</div>
+          <div class="w-chat-log">${body || '<div class="ce-placeholder">대화를 추가해주세요</div>'}</div>
+        </div>
+      `;
+    },
+    fields(content) {
+      return `
+        <label>제목
+          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
+        </label>
+        <button class="btn btn-ghost" data-upload="1" data-target="content.avatar">${content.avatar ? '아바타 바꾸기' : '아바타 업로드'}</button>
+        ${content.avatar ? `<img class="editor-panel-preview" src="${escapeHtml(content.avatar)}" alt="">` : ''}
+        <label>대화 내용 (한 줄에 "이름|대사", 내 대사는 이름 없이 "|대사")
+          <textarea data-field="content.lines" rows="6" placeholder="SYNDROME|어디 가지 말고 내 시야 안에 있어.&#10;|......네에.">${escapeHtml(content.lines || '')}</textarea>
+        </label>
       `;
     }
   },
@@ -295,7 +427,7 @@ const WIDGETS = {
         <label>별점 (0~5, 0.5 단위)
           <input type="number" min="0" max="5" step="0.5" data-field="content.rating" value="${Number(content.rating) || 0}">
         </label>
-        <button class="btn btn-ghost" data-upload="1">${content.imageSrc ? '썸네일 바꾸기' : '썸네일 업로드'}</button>
+        <button class="btn btn-ghost" data-upload="1" data-target="content.imageSrc">${content.imageSrc ? '썸네일 바꾸기' : '썸네일 업로드'}</button>
         ${content.imageSrc ? `<img class="editor-panel-preview" src="${escapeHtml(content.imageSrc)}" alt="">` : ''}
       `;
     }
@@ -441,11 +573,15 @@ function elementBodyHTML(el) {
     case 'widget': {
       const def = WIDGETS[content.widgetKind];
       if (!def) return '';
-      return `<div class="ce-widget">${def.render(content, style)}</div>`;
+      return `<div class="ce-widget">${def.render(content, style, el)}</div>`;
     }
     default:
       return '';
   }
+}
+
+function roundedStyle(el) {
+  return el.style?.rounded ? { borderRadius: '16px', overflow: 'hidden' } : { borderRadius: '0px', overflow: 'visible' };
 }
 
 export function renderStaticCanvas(mount, { background, elements }) {
@@ -456,6 +592,7 @@ export function renderStaticCanvas(mount, { background, elements }) {
     if (el.visible === false) continue;
     const node = document.createElement('div');
     node.className = 'canvas-element';
+    const rounded = roundedStyle(el);
     Object.assign(node.style, {
       left: `${el.x}px`,
       top: `${el.y}px`,
@@ -463,7 +600,9 @@ export function renderStaticCanvas(mount, { background, elements }) {
       height: `${el.height}px`,
       transform: `rotate(${el.rotation || 0}deg)`,
       opacity: el.opacity ?? 1,
-      zIndex: el.zIndex ?? 0
+      zIndex: el.zIndex ?? 0,
+      borderRadius: rounded.borderRadius,
+      overflow: rounded.overflow
     });
     node.innerHTML = elementBodyHTML(el);
     mount.appendChild(node);
@@ -477,30 +616,44 @@ const ELEMENT_DEFAULTS = {
   button: { width: 160, height: 48, content: { label: '버튼', href: '' }, style: { background: '#5b5bf0', color: '#ffffff' } }
 };
 
-export function mountEditor({ container, pageId, background, elements: initialElements, guestbookHref, onExit }) {
+export function mountEditor({
+  container,
+  pageId,
+  background,
+  elements: initialElements,
+  guestbookHref,
+  theme,
+  themeColors,
+  customCss,
+  siteName,
+  faviconUrl,
+  cursorUrl,
+  bannerImage,
+  bannerTitle,
+  fontFamily,
+  onExit
+}) {
   const state = {
     background: background ? { ...background } : { type: 'color', value: '#f5f5f5' },
     elements: (initialElements || []).map((el) => ({ ...el, id: el.id || genId() })),
     selectedId: null,
-    dirty: false
+    dirty: false,
+    tab: 'widgets',
+    theme: theme || 'basic',
+    themeColors: { ...(themeColors || {}) },
+    customCss: customCss || '',
+    siteName: siteName || '',
+    faviconUrl: faviconUrl || '',
+    cursorUrl: cursorUrl || '',
+    bannerImage: bannerImage || '',
+    bannerTitle: bannerTitle || '',
+    fontFamily: fontFamily || 'pretendard'
   };
 
   container.innerHTML = `
     <div class="editor-shell">
       <div class="editor-toolbar">
-        <div class="editor-toolbar-group">
-          <button class="btn btn-ghost" data-add="text">+텍스트</button>
-          <button class="btn btn-ghost" data-add="image">+이미지</button>
-          <button class="btn btn-ghost" data-add="box">+박스</button>
-          <button class="btn btn-ghost" data-add="button">+버튼</button>
-          <select id="widgetSelect">
-            <option value="">+위젯</option>
-            ${Object.entries(WIDGETS)
-              .map(([key, def]) => `<option value="${key}">${escapeHtml(def.label)}</option>`)
-              .join('')}
-          </select>
-          <button class="btn btn-ghost" id="bgBtn">배경</button>
-        </div>
+        <span class="editor-toolbar-title">꾸미기 모드</span>
         <div class="editor-toolbar-group">
           <span class="editor-dirty-indicator" id="dirtyIndicator"></span>
           <button class="btn btn-primary" id="saveBtn">저장</button>
@@ -512,14 +665,18 @@ export function mountEditor({ container, pageId, background, elements: initialEl
           <div class="canvas-stage editor-stage" id="stage" style="width:${CANVAS_WIDTH}px;height:${CANVAS_HEIGHT}px"></div>
         </div>
         <aside class="editor-panel" id="panel">
-          <p class="editor-panel-empty">요소를 선택하면 여기서 편집할 수 있어요.</p>
+          <div class="editor-tabs">
+            <button type="button" class="editor-tab" data-tab="basic">기본설정</button>
+            <button type="button" class="editor-tab" data-tab="background">배경</button>
+            <button type="button" class="editor-tab" data-tab="widgets">위젯 설정</button>
+          </div>
+          <div class="editor-tab-body" id="tabBody"></div>
         </aside>
       </div>
     </div>
   `;
 
   const stage = container.querySelector('#stage');
-  const panel = container.querySelector('#panel');
   const dirtyIndicator = container.querySelector('#dirtyIndicator');
 
   applyBackground(stage, state.background);
@@ -550,7 +707,11 @@ export function mountEditor({ container, pageId, background, elements: initialEl
   }
 
   function renderBody(node, el) {
-    node.querySelector('.ce-body').innerHTML = elementBodyHTML(el);
+    const body = node.querySelector('.ce-body');
+    body.innerHTML = elementBodyHTML(el);
+    const rounded = roundedStyle(el);
+    body.style.borderRadius = rounded.borderRadius;
+    body.style.overflow = rounded.overflow;
   }
 
   function buildElementNode(el) {
@@ -688,52 +849,340 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     stage.querySelectorAll('.editor-element').forEach((n) => {
       n.classList.toggle('selected', n.dataset.id === id);
     });
-    renderPanel();
+    setTab('widgets');
   }
 
   function deselect() {
     state.selectedId = null;
     stage.querySelectorAll('.editor-element').forEach((n) => n.classList.remove('selected'));
-    renderPanel();
+    renderTabBody();
   }
 
   stage.addEventListener('pointerdown', (e) => {
     if (e.target === stage) deselect();
   });
 
-  function renderPanel() {
+  function setTab(tab) {
+    state.tab = tab;
+    renderTabBody();
+  }
+
+  function renderTabBody() {
+    container.querySelectorAll('.editor-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === state.tab));
+    const body = container.querySelector('#tabBody');
+    if (state.tab === 'basic') renderBasicTab(body);
+    else if (state.tab === 'background') renderBackgroundTab(body);
+    else renderWidgetsTab(body);
+  }
+
+  container.querySelectorAll('.editor-tab').forEach((btn) => {
+    btn.addEventListener('click', () => setTab(btn.dataset.tab));
+  });
+
+  function uploadStateField(onDone) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        showToast('이미지 용량은 3MB 이하만 가능합니다.', 'error');
+        return;
+      }
+      try {
+        const url = await uploadImage(file);
+        onDone(url);
+      } catch (err) {
+        showToast(err.message || '업로드에 실패했습니다.', 'error');
+      }
+    });
+    input.click();
+  }
+
+  function renderBasicTab(body) {
+    body.innerHTML = `
+      <h3>기본 설정</h3>
+      <label>사이트 이름
+        <input type="text" id="siteNameInput" maxlength="60" value="${escapeHtml(state.siteName)}" placeholder="탭 제목 및 공유될 이름">
+      </label>
+      <label>폰트
+        <select id="fontSelect">
+          ${Object.entries(FONT_PRESETS)
+            .map(([key, font]) => `<option value="${key}" ${state.fontFamily === key ? 'selected' : ''}>${escapeHtml(font.label)}</option>`)
+            .join('')}
+        </select>
+      </label>
+      <label>파비콘
+        <div class="editor-panel-actions">
+          <button type="button" class="btn btn-ghost" id="faviconBtn">${state.faviconUrl ? '변경' : '업로드'}</button>
+          ${state.faviconUrl ? `<button type="button" class="btn btn-ghost" id="faviconRemoveBtn">삭제</button>` : ''}
+        </div>
+        ${state.faviconUrl ? `<img class="editor-panel-preview" style="width:40px;height:40px;object-fit:cover" src="${escapeHtml(state.faviconUrl)}" alt="">` : ''}
+      </label>
+      <label>마우스 커서
+        <div class="editor-panel-actions">
+          <button type="button" class="btn btn-ghost" id="cursorBtn">${state.cursorUrl ? '변경' : '업로드'}</button>
+          ${state.cursorUrl ? `<button type="button" class="btn btn-ghost" id="cursorRemoveBtn">삭제</button>` : ''}
+        </div>
+        ${state.cursorUrl ? `<img class="editor-panel-preview" style="width:40px;height:40px;object-fit:cover" src="${escapeHtml(state.cursorUrl)}" alt="">` : ''}
+      </label>
+      <hr>
+      <p class="editor-panel-empty">아래 배너는 다른 사람이 "배너" 위젯에 내 핸들을 입력하면 자동으로 표시되는 이미지예요. 나중에 바꾸면 걸어둔 곳에도 자동으로 반영돼요.</p>
+      <label>내 배너 이미지 (88×31 권장)
+        <div class="editor-panel-actions">
+          <button type="button" class="btn btn-ghost" id="bannerBtn">${state.bannerImage ? '변경' : '업로드'}</button>
+          ${state.bannerImage ? `<button type="button" class="btn btn-ghost" id="bannerRemoveBtn">삭제</button>` : ''}
+        </div>
+        ${state.bannerImage ? `<img class="editor-panel-preview" style="width:88px;height:31px;object-fit:cover" src="${escapeHtml(state.bannerImage)}" alt="">` : ''}
+      </label>
+      <label>배너 제목 (이미지가 없을 때 대신 표시)
+        <input type="text" id="bannerTitleInput" maxlength="60" value="${escapeHtml(state.bannerTitle)}">
+      </label>
+    `;
+
+    body.querySelector('#siteNameInput').addEventListener('input', (e) => {
+      state.siteName = e.target.value;
+      markDirty();
+    });
+    body.querySelector('#bannerTitleInput').addEventListener('input', (e) => {
+      state.bannerTitle = e.target.value;
+      markDirty();
+    });
+    body.querySelector('#fontSelect').addEventListener('change', (e) => {
+      state.fontFamily = e.target.value;
+      applyFont(state.fontFamily);
+      markDirty();
+    });
+    body.querySelector('#faviconBtn').addEventListener('click', () =>
+      uploadStateField((url) => {
+        state.faviconUrl = url;
+        markDirty();
+        renderTabBody();
+      })
+    );
+    body.querySelector('#cursorBtn').addEventListener('click', () =>
+      uploadStateField((url) => {
+        state.cursorUrl = url;
+        markDirty();
+        renderTabBody();
+      })
+    );
+    body.querySelector('#bannerBtn').addEventListener('click', () =>
+      uploadStateField((url) => {
+        state.bannerImage = url;
+        markDirty();
+        renderTabBody();
+      })
+    );
+    const faviconRemoveBtn = body.querySelector('#faviconRemoveBtn');
+    if (faviconRemoveBtn) faviconRemoveBtn.addEventListener('click', () => { state.faviconUrl = ''; markDirty(); renderTabBody(); });
+    const cursorRemoveBtn = body.querySelector('#cursorRemoveBtn');
+    if (cursorRemoveBtn) cursorRemoveBtn.addEventListener('click', () => { state.cursorUrl = ''; markDirty(); renderTabBody(); });
+    const bannerRemoveBtn = body.querySelector('#bannerRemoveBtn');
+    if (bannerRemoveBtn) bannerRemoveBtn.addEventListener('click', () => { state.bannerImage = ''; markDirty(); renderTabBody(); });
+  }
+
+  function renderBackgroundTab(body) {
+    const bg = state.background;
+    const COLOR_LABELS = { bg: '배경색', surface: '박스색', primary: '포인트색', text: '기본 글자', muted: '서브 글자' };
+
+    body.innerHTML = `
+      <h3>테마</h3>
+      <div class="theme-swatch-grid" id="themeSwatchGrid">
+        ${Object.entries(THEME_PRESETS)
+          .map(
+            ([key, preset]) => `
+          <button type="button" class="theme-swatch ${key === state.theme ? 'active' : ''}" data-theme="${key}"
+            style="background:${preset.bg};color:${preset.text};border-color:${preset.primary}">
+            ${escapeHtml(preset.label)}
+          </button>
+        `
+          )
+          .join('')}
+      </div>
+      <div class="theme-color-fields" id="themeColorFields"></div>
+      <hr>
+      <h3>배경</h3>
+      <label>종류
+        <select id="bgType">
+          <option value="color" ${bg.type === 'color' ? 'selected' : ''}>단색</option>
+          <option value="gradient" ${bg.type === 'gradient' ? 'selected' : ''}>그라데이션</option>
+          <option value="image" ${bg.type === 'image' ? 'selected' : ''}>이미지</option>
+        </select>
+      </label>
+      <div id="bgFields"></div>
+      <hr>
+      <h3>커스텀 CSS</h3>
+      <p class="editor-panel-empty">내 개인홈을 볼 때만 적용돼요.</p>
+      <textarea id="customCssInput" rows="8" spellcheck="false" placeholder=".profile-bio { color: hotpink; }">${escapeHtml(state.customCss)}</textarea>
+    `;
+
+    function renderColorFields() {
+      const colors = resolveThemeColors(state.theme, state.themeColors);
+      body.querySelector('#themeColorFields').innerHTML = Object.keys(COLOR_LABELS)
+        .map(
+          (key) => `
+        <label class="theme-color-field">${COLOR_LABELS[key]}
+          <input type="color" data-color="${key}" value="${colors[key]}">
+        </label>
+      `
+        )
+        .join('');
+
+      body.querySelectorAll('[data-color]').forEach((input) => {
+        input.addEventListener('input', () => {
+          state.themeColors = { ...state.themeColors, [input.dataset.color]: input.value };
+          applyTheme(state.theme, state.themeColors);
+          markDirty();
+        });
+      });
+    }
+    renderColorFields();
+    applyTheme(state.theme, state.themeColors);
+
+    body.querySelectorAll('[data-theme]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.theme = btn.dataset.theme;
+        state.themeColors = {};
+        body.querySelectorAll('[data-theme]').forEach((b) => b.classList.toggle('active', b === btn));
+        renderColorFields();
+        applyTheme(state.theme, state.themeColors);
+        markDirty();
+      });
+    });
+
+    function renderBgFields() {
+      const fields = body.querySelector('#bgFields');
+      if (bg.type === 'color') {
+        const value = /^#[0-9a-fA-F]{6}$/.test(bg.value) ? bg.value : '#f5f5f5';
+        fields.innerHTML = `<label>색상<input type="color" id="bgColor" value="${value}"></label>`;
+        fields.querySelector('#bgColor').addEventListener('input', (e) => {
+          bg.value = e.target.value;
+          applyBackground(stage, bg);
+          markDirty();
+        });
+      } else if (bg.type === 'gradient') {
+        fields.innerHTML = `
+          <label>CSS 그라데이션
+            <input type="text" id="bgGradient" value="${escapeHtml(bg.value || 'linear-gradient(135deg,#a8c0ff,#fbc2eb)')}" placeholder="linear-gradient(...)">
+          </label>
+        `;
+        fields.querySelector('#bgGradient').addEventListener('input', (e) => {
+          bg.value = e.target.value;
+          applyBackground(stage, bg);
+          markDirty();
+        });
+      } else if (bg.type === 'image') {
+        fields.innerHTML = `
+          <button type="button" class="btn btn-ghost" id="bgUploadBtn">${bg.value ? '이미지 바꾸기' : '이미지 업로드'}</button>
+          ${bg.value ? `<img class="editor-panel-preview" src="${escapeHtml(bg.value)}" alt="">` : ''}
+          <label>맞춤
+            <select id="bgSize">
+              <option value="cover" ${bg.size === 'cover' || !bg.size ? 'selected' : ''}>화면 채우기</option>
+              <option value="contain" ${bg.size === 'contain' ? 'selected' : ''}>전체 보이기</option>
+              <option value="repeat" ${bg.size === 'repeat' ? 'selected' : ''}>반복</option>
+            </select>
+          </label>
+        `;
+        fields.querySelector('#bgUploadBtn').addEventListener('click', () => {
+          uploadStateField((url) => {
+            bg.value = url;
+            applyBackground(stage, bg);
+            markDirty();
+            renderBgFields();
+          });
+        });
+        fields.querySelector('#bgSize').addEventListener('change', (e) => {
+          bg.size = e.target.value === 'repeat' ? 'auto' : e.target.value;
+          bg.repeat = e.target.value === 'repeat' ? 'repeat' : 'no-repeat';
+          applyBackground(stage, bg);
+          markDirty();
+        });
+      }
+    }
+
+    renderBgFields();
+    body.querySelector('#bgType').addEventListener('change', (e) => {
+      bg.type = e.target.value;
+      if (bg.type === 'color' && !/^#[0-9a-fA-F]{6}$/.test(bg.value)) bg.value = '#f5f5f5';
+      renderBgFields();
+      applyBackground(stage, bg);
+      markDirty();
+    });
+
+    body.querySelector('#customCssInput').addEventListener('input', (e) => {
+      state.customCss = e.target.value;
+      applyCustomCss(state.customCss);
+      markDirty();
+    });
+  }
+
+  function renderWidgetsTab(body) {
     const el = elementById(state.selectedId);
     if (!el) {
-      panel.innerHTML = `<p class="editor-panel-empty">요소를 선택하면 여기서 편집할 수 있어요.</p>`;
+      body.innerHTML = `
+        <h3>요소 추가</h3>
+        <div class="editor-add-grid">
+          <button type="button" class="btn btn-ghost" data-add="text">+텍스트</button>
+          <button type="button" class="btn btn-ghost" data-add="image">+이미지</button>
+          <button type="button" class="btn btn-ghost" data-add="box">+박스</button>
+          <button type="button" class="btn btn-ghost" data-add="button">+버튼</button>
+        </div>
+        <label>위젯 추가
+          <select id="widgetSelect">
+            <option value="">선택해주세요</option>
+            ${Object.entries(WIDGETS)
+              .map(([key, def]) => `<option value="${key}">${escapeHtml(def.label)}</option>`)
+              .join('')}
+          </select>
+        </label>
+        <p class="editor-panel-empty">캔버스에서 요소를 클릭하면 여기서 세부 설정을 편집할 수 있어요.</p>
+      `;
+      body.querySelectorAll('[data-add]').forEach((btn) => {
+        btn.addEventListener('click', () => addElement(btn.dataset.add));
+      });
+      body.querySelector('#widgetSelect').addEventListener('change', (e) => {
+        const kind = e.target.value;
+        if (!kind) return;
+        addElement('widget', kind);
+        e.target.value = '';
+      });
       return;
     }
-    panel.innerHTML = `
+
+    body.innerHTML = `
+      <button type="button" class="btn btn-ghost" id="widgetsBackBtn">← 목록으로</button>
       <div class="editor-panel-actions">
-        <button class="btn btn-ghost" data-act="front">앞으로</button>
-        <button class="btn btn-ghost" data-act="back">뒤로</button>
-        <button class="btn btn-ghost" data-act="duplicate">복제</button>
-        <button class="btn btn-ghost" data-act="hide">${el.visible === false ? '보이기' : '숨기기'}</button>
-        <button class="btn btn-ghost" data-act="delete">삭제</button>
+        <button type="button" class="btn btn-ghost" data-act="front">앞으로</button>
+        <button type="button" class="btn btn-ghost" data-act="back">뒤로</button>
+        <button type="button" class="btn btn-ghost" data-act="duplicate">복제</button>
+        <button type="button" class="btn btn-ghost" data-act="hide">${el.visible === false ? '보이기' : '숨기기'}</button>
+        <button type="button" class="btn btn-ghost" data-act="delete">삭제</button>
       </div>
       <label>투명도
         <input type="range" min="0" max="1" step="0.05" value="${el.opacity ?? 1}" data-field="opacity">
       </label>
+      <label class="editor-inline-check">
+        <input type="checkbox" ${el.style?.rounded ? 'checked' : ''} data-field="style.rounded"> 모서리 둥글게
+      </label>
       ${elementFieldsHTML(el)}
     `;
 
-    panel.querySelector('[data-act="front"]').addEventListener('click', () => reorder(el, 'front'));
-    panel.querySelector('[data-act="back"]').addEventListener('click', () => reorder(el, 'back'));
-    panel.querySelector('[data-act="duplicate"]').addEventListener('click', () => duplicateElement(el));
-    panel.querySelector('[data-act="hide"]').addEventListener('click', () => toggleVisible(el));
-    panel.querySelector('[data-act="delete"]').addEventListener('click', () => deleteElement(el));
+    body.querySelector('#widgetsBackBtn').addEventListener('click', deselect);
+    body.querySelector('[data-act="front"]').addEventListener('click', () => reorder(el, 'front'));
+    body.querySelector('[data-act="back"]').addEventListener('click', () => reorder(el, 'back'));
+    body.querySelector('[data-act="duplicate"]').addEventListener('click', () => duplicateElement(el));
+    body.querySelector('[data-act="hide"]').addEventListener('click', () => toggleVisible(el));
+    body.querySelector('[data-act="delete"]').addEventListener('click', () => deleteElement(el));
 
-    panel.querySelectorAll('[data-field]').forEach((input) => {
+    body.querySelectorAll('[data-field]').forEach((input) => {
       input.addEventListener('input', () => updateField(el, input));
     });
-    panel.querySelectorAll('[data-upload]').forEach((btn) => {
-      btn.addEventListener('click', () => triggerImageUpload(el));
+    body.querySelectorAll('[data-upload]').forEach((btn) => {
+      btn.addEventListener('click', () => triggerImageUpload(el, btn.dataset.target || 'content.src'));
     });
-    panel.querySelectorAll('[data-upload-audio]').forEach((btn) => {
+    body.querySelectorAll('[data-upload-audio]').forEach((btn) => {
       btn.addEventListener('click', () => triggerAudioUpload(el));
     });
     if (el.type === 'widget' && el.content?.widgetKind === 'gallery') {
@@ -769,7 +1218,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     }
     if (el.type === 'image') {
       return `
-        <button class="btn btn-ghost" data-upload="1">${content.src ? '이미지 바꾸기' : '이미지 업로드'}</button>
+        <button type="button" class="btn btn-ghost" data-upload="1">${content.src ? '이미지 바꾸기' : '이미지 업로드'}</button>
         ${content.src ? `<img class="editor-panel-preview" src="${escapeHtml(content.src)}" alt="">` : ''}
       `;
     }
@@ -814,7 +1263,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
 
   function renderGalleryFields(el) {
     const images = Array.isArray(el.content.images) ? el.content.images : [];
-    const wrap = panel.querySelector('#galleryFields');
+    const wrap = container.querySelector('#galleryFields');
     if (!wrap) return;
     wrap.innerHTML = `
       <div class="board-editor-images">
@@ -887,7 +1336,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     markDirty();
   }
 
-  async function triggerImageUpload(el) {
+  async function triggerImageUpload(el, targetPath = 'content.src') {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/png,image/jpeg,image/gif,image/webp';
@@ -900,10 +1349,10 @@ export function mountEditor({ container, pageId, background, elements: initialEl
       }
       try {
         const url = await uploadImage(file);
-        el.content = { ...(el.content || {}), src: url };
-        const node = stage.querySelector(`.editor-element[data-id="${el.id}"]`);
-        renderBody(node, el);
-        renderPanel();
+        const [group, key] = targetPath.split('.');
+        el[group] = { ...(el[group] || {}), [key]: url };
+        refreshElementBody(el);
+        renderTabBody();
         markDirty();
       } catch (err) {
         showToast(err.message || '업로드에 실패했습니다.', 'error');
@@ -927,7 +1376,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
         const url = await uploadImage(file);
         el.content = { ...(el.content || {}), audioUrl: url };
         refreshElementBody(el);
-        renderPanel();
+        renderTabBody();
         markDirty();
       } catch (err) {
         showToast(err.message || '업로드에 실패했습니다.', 'error');
@@ -946,6 +1395,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
   function toggleVisible(el) {
     el.visible = el.visible === false;
     renderElements();
+    renderTabBody();
     markDirty();
   }
 
@@ -968,7 +1418,7 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     state.elements = state.elements.filter((e) => e.id !== el.id);
     state.selectedId = null;
     renderElements();
-    renderPanel();
+    renderTabBody();
     markDirty();
   }
 
@@ -1011,116 +1461,24 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     markDirty();
   }
 
-  container.querySelectorAll('[data-add]').forEach((btn) => {
-    btn.addEventListener('click', () => addElement(btn.dataset.add));
-  });
-
-  container.querySelector('#widgetSelect').addEventListener('change', (e) => {
-    const kind = e.target.value;
-    if (!kind) return;
-    addElement('widget', kind);
-    e.target.value = '';
-  });
-
-  function openBackgroundPanel() {
-    const bg = state.background;
-    panel.innerHTML = `
-      <h3>배경 설정</h3>
-      <label>종류
-        <select id="bgType">
-          <option value="color" ${bg.type === 'color' ? 'selected' : ''}>단색</option>
-          <option value="gradient" ${bg.type === 'gradient' ? 'selected' : ''}>그라데이션</option>
-          <option value="image" ${bg.type === 'image' ? 'selected' : ''}>이미지</option>
-        </select>
-      </label>
-      <div id="bgFields"></div>
-      <button class="btn btn-ghost" id="bgBackBtn">← 요소 편집으로</button>
-    `;
-
-    function renderBgFields() {
-      const fields = panel.querySelector('#bgFields');
-      if (bg.type === 'color') {
-        const value = /^#[0-9a-fA-F]{6}$/.test(bg.value) ? bg.value : '#f5f5f5';
-        fields.innerHTML = `<label>색상<input type="color" id="bgColor" value="${value}"></label>`;
-        fields.querySelector('#bgColor').addEventListener('input', (e) => {
-          bg.value = e.target.value;
-          applyBackground(stage, bg);
-          markDirty();
-        });
-      } else if (bg.type === 'gradient') {
-        fields.innerHTML = `
-          <label>CSS 그라데이션
-            <input type="text" id="bgGradient" value="${escapeHtml(bg.value || 'linear-gradient(135deg,#a8c0ff,#fbc2eb)')}" placeholder="linear-gradient(...)">
-          </label>
-        `;
-        fields.querySelector('#bgGradient').addEventListener('input', (e) => {
-          bg.value = e.target.value;
-          applyBackground(stage, bg);
-          markDirty();
-        });
-      } else if (bg.type === 'image') {
-        fields.innerHTML = `
-          <button class="btn btn-ghost" id="bgUploadBtn">${bg.value ? '이미지 바꾸기' : '이미지 업로드'}</button>
-          ${bg.value ? `<img class="editor-panel-preview" src="${escapeHtml(bg.value)}" alt="">` : ''}
-          <label>맞춤
-            <select id="bgSize">
-              <option value="cover" ${bg.size === 'cover' || !bg.size ? 'selected' : ''}>화면 채우기</option>
-              <option value="contain" ${bg.size === 'contain' ? 'selected' : ''}>전체 보이기</option>
-              <option value="repeat" ${bg.size === 'repeat' ? 'selected' : ''}>반복</option>
-            </select>
-          </label>
-        `;
-        fields.querySelector('#bgUploadBtn').addEventListener('click', () => {
-          const input = document.createElement('input');
-          input.type = 'file';
-          input.accept = 'image/png,image/jpeg,image/gif,image/webp';
-          input.addEventListener('change', async () => {
-            const file = input.files[0];
-            if (!file) return;
-            if (file.size > MAX_UPLOAD_BYTES) {
-              showToast('이미지 용량은 3MB 이하만 가능합니다.', 'error');
-              return;
-            }
-            try {
-              bg.value = await uploadImage(file);
-              applyBackground(stage, bg);
-              markDirty();
-              renderBgFields();
-            } catch (err) {
-              showToast(err.message || '업로드에 실패했습니다.', 'error');
-            }
-          });
-          input.click();
-        });
-        fields.querySelector('#bgSize').addEventListener('change', (e) => {
-          bg.size = e.target.value === 'repeat' ? 'auto' : e.target.value;
-          bg.repeat = e.target.value === 'repeat' ? 'repeat' : 'no-repeat';
-          applyBackground(stage, bg);
-          markDirty();
-        });
-      }
-    }
-
-    renderBgFields();
-    panel.querySelector('#bgType').addEventListener('change', (e) => {
-      bg.type = e.target.value;
-      if (bg.type === 'color' && !/^#[0-9a-fA-F]{6}$/.test(bg.value)) bg.value = '#f5f5f5';
-      renderBgFields();
-      applyBackground(stage, bg);
-      markDirty();
-    });
-    panel.querySelector('#bgBackBtn').addEventListener('click', renderPanel);
-  }
-
-  container.querySelector('#bgBtn').addEventListener('click', openBackgroundPanel);
-
   container.querySelector('#saveBtn').addEventListener('click', async () => {
     const btn = container.querySelector('#saveBtn');
     btn.disabled = true;
     btn.textContent = '저장 중...';
     try {
       await Promise.all([
-        saveBackground(state.background),
+        updateProfile({
+          background: state.background,
+          theme: state.theme,
+          themeColors: state.themeColors,
+          customCss: state.customCss,
+          siteName: state.siteName,
+          faviconUrl: state.faviconUrl,
+          cursorUrl: state.cursorUrl,
+          bannerImage: state.bannerImage,
+          bannerTitle: state.bannerTitle,
+          fontFamily: state.fontFamily
+        }),
         savePageElements(pageId, state.elements)
       ]);
       markClean();
@@ -1137,8 +1495,20 @@ export function mountEditor({ container, pageId, background, elements: initialEl
     if (state.dirty && !window.confirm('저장하지 않은 변경사항이 있어요. 저장하지 않고 나갈까요?')) {
       return;
     }
-    onExit(state.elements, state.background);
+    onExit(state.elements, {
+      background: state.background,
+      theme: state.theme,
+      themeColors: state.themeColors,
+      customCss: state.customCss,
+      siteName: state.siteName,
+      faviconUrl: state.faviconUrl,
+      cursorUrl: state.cursorUrl,
+      bannerImage: state.bannerImage,
+      bannerTitle: state.bannerTitle,
+      fontFamily: state.fontFamily
+    });
   });
 
   renderElements();
+  setTab('widgets');
 }

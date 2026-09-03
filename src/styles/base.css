@@ -14,7 +14,7 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+  font-family: var(--font-family, 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', sans-serif);
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -315,7 +315,9 @@ body {
 .w-music,
 .w-rating,
 .w-progress,
-.w-donut {
+.w-donut,
+.w-calendar,
+.w-chat {
   width: 100%;
   height: 100%;
   box-sizing: border-box;
@@ -599,6 +601,170 @@ body {
   margin-right: 4px;
 }
 
+.w-banner,
+.w-banner-text,
+.w-banner-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.w-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.w-banner-text {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 11px;
+  text-align: center;
+  padding: 4px;
+}
+
+.w-banner-empty {
+  flex-direction: column;
+  gap: 2px;
+  background: repeating-linear-gradient(45deg, #eee, #eee 6px, #f7f7f5 6px, #f7f7f5 12px);
+  color: var(--color-muted);
+  font-size: 10.5px;
+}
+
+.w-banner-empty span {
+  font-size: 9.5px;
+}
+
+.w-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow-y: auto;
+}
+
+.w-chat-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
+
+.w-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.w-chat-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.w-chat-row-me {
+  justify-content: flex-end;
+}
+
+.w-chat-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.w-chat-avatar-empty {
+  background: var(--color-border);
+}
+
+.w-chat-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 78%;
+}
+
+.w-chat-name {
+  font-size: 10.5px;
+  color: var(--color-muted);
+}
+
+.w-chat-bubble {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 14px 14px 14px 4px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.w-chat-bubble-me {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: 14px 14px 4px 14px;
+  max-width: 78%;
+}
+
+.w-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.w-cal-head {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12.5px;
+}
+
+.w-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+
+.w-cal-weekdays span {
+  color: var(--color-muted);
+  font-size: 10.5px;
+}
+
+.w-cal-cell {
+  padding: 4px 0;
+  border-radius: 6px;
+  font-size: 11px;
+}
+
+.w-cal-empty {
+  visibility: hidden;
+}
+
+.w-cal-today {
+  background: var(--color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.w-cal-highlight:not(.w-cal-today) {
+  background: rgba(91, 91, 240, 0.15);
+  font-weight: 600;
+}
+
 /* Editor-only interaction chrome */
 
 .editor-shell {
@@ -619,21 +785,17 @@ body {
   flex-wrap: wrap;
 }
 
+.editor-toolbar-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
 .editor-toolbar-group {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.editor-toolbar-group select#widgetSelect {
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: transparent;
-  font: inherit;
-  font-size: 14px;
-  color: var(--color-text);
-}
 
 .editor-dirty-indicator {
   font-size: 12px;
@@ -702,15 +864,59 @@ body {
 }
 
 .editor-panel {
-  width: 260px;
+  width: 300px;
   flex-shrink: 0;
   border-left: 1px solid var(--color-border);
   background: var(--color-surface);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.editor-tab {
+  flex: 1;
+  padding: 12px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.editor-tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+  font-weight: 600;
+}
+
+.editor-tab-body {
+  flex: 1;
   padding: 16px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.editor-tab-body hr {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0;
+}
+
+.editor-add-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 
 .editor-panel h3 {

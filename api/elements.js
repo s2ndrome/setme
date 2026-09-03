@@ -3,6 +3,37 @@ import { getUidFromRequest } from './_lib/auth.js';
 import { getHomeMeta, canView } from './_lib/home.js';
 import { sanitizeElements } from './_lib/elements.js';
 
+// Banner widgets only store the referenced handle in their content — the
+// actual image/title is looked up fresh on every read, so if that person
+// changes their banner later it updates everywhere it's embedded without
+// needing to touch the pages that embed it.
+async function resolveBanners(elementRows) {
+  const handles = new Set();
+  for (const el of elementRows) {
+    if (el.type === 'widget' && el.content?.widgetKind === 'banner') {
+      const handle = String(el.content.username || '').trim().toLowerCase().replace(/^@/, '');
+      if (handle) handles.add(handle);
+    }
+  }
+  if (handles.size === 0) return new Map();
+
+  const rows = await sql`
+    select u.username, h.banner_image, h.banner_title
+    from users u
+    left join homes h on h.uid = u.id
+    where u.username = any(${Array.from(handles)}::text[])
+  `;
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.username, {
+      found: true,
+      bannerImage: row.banner_image || '',
+      bannerTitle: row.banner_title || ''
+    });
+  }
+  return map;
+}
+
 async function handleGet(req, res) {
   const username = String(req.query.username || '').trim().toLowerCase();
   const slug = String(req.query.page || '').trim().toLowerCase();
@@ -26,23 +57,32 @@ async function handleGet(req, res) {
     order by z_index asc
   `;
 
+  const bannerMap = await resolveBanners(elementRows);
+
   return res.status(200).json({
     pageId: page.id,
     pageKind: page.kind,
-    elements: elementRows.map((el) => ({
-      id: el.id,
-      type: el.type,
-      x: el.x,
-      y: el.y,
-      width: el.width,
-      height: el.height,
-      rotation: el.rotation,
-      zIndex: el.z_index,
-      visible: el.visible,
-      opacity: el.opacity,
-      content: el.content,
-      style: el.style
-    }))
+    elements: elementRows.map((el) => {
+      const base = {
+        id: el.id,
+        type: el.type,
+        x: el.x,
+        y: el.y,
+        width: el.width,
+        height: el.height,
+        rotation: el.rotation,
+        zIndex: el.z_index,
+        visible: el.visible,
+        opacity: el.opacity,
+        content: el.content,
+        style: el.style
+      };
+      if (el.type === 'widget' && el.content?.widgetKind === 'banner') {
+        const handle = String(el.content.username || '').trim().toLowerCase().replace(/^@/, '');
+        base.resolved = bannerMap.get(handle) || { found: false };
+      }
+      return base;
+    })
   });
 }
 

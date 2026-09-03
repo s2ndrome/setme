@@ -13,8 +13,8 @@ async function request(path, options = {}) {
   return data;
 }
 
-export function signUp(email, password) {
-  return request('/auth', { method: 'POST', body: { action: 'signup', email, password } });
+export function signUp(email, password, inviteCode) {
+  return request('/auth', { method: 'POST', body: { action: 'signup', email, password, inviteCode } });
 }
 
 export function signIn(email, password) {
