@@ -1,19 +1,21 @@
 import { sql } from './_lib/db.js';
 import { getUidFromRequest } from './_lib/auth.js';
 import { getHomeMeta, canView } from './_lib/home.js';
+import { sanitizeRichText } from './_lib/richtext.js';
+import { sanitizeUrl } from './_lib/text.js';
 
 const MAX_TITLE = 100;
-const MAX_CONTENT = 20000;
 const MAX_IMAGES = 10;
 
 function sanitizePost(raw) {
   const title = String(raw.title || '').slice(0, MAX_TITLE);
-  const content = String(raw.content || '').slice(0, MAX_CONTENT);
+  const content = sanitizeRichText(raw.content);
+  const coverImage = sanitizeUrl(raw.coverImage);
   const images = Array.isArray(raw.images)
     ? raw.images.filter((u) => typeof u === 'string').slice(0, MAX_IMAGES)
     : [];
   const visibility = raw.visibility === 'private' ? 'private' : 'public';
-  return { title, content, images, visibility };
+  return { title, content, coverImage, images, visibility };
 }
 
 function formatPost(row) {
@@ -22,6 +24,7 @@ function formatPost(row) {
     pageId: row.page_id,
     title: row.title,
     content: row.content,
+    coverImage: row.cover_image || '',
     images: row.images,
     visibility: row.visibility,
     createdAt: row.created_at,
@@ -81,8 +84,8 @@ async function handleCreate(req, res) {
 
   const clean = sanitizePost(req.body || {});
   const inserted = await sql`
-    insert into posts (uid, page_id, title, content, images, visibility)
-    values (${uid}, ${pageId}, ${clean.title}, ${clean.content}, ${JSON.stringify(clean.images)}::jsonb, ${clean.visibility})
+    insert into posts (uid, page_id, title, content, cover_image, images, visibility)
+    values (${uid}, ${pageId}, ${clean.title}, ${clean.content}, ${clean.coverImage}, ${JSON.stringify(clean.images)}::jsonb, ${clean.visibility})
     returning id
   `;
   return res.status(200).json({ id: inserted[0].id });
@@ -92,18 +95,27 @@ async function handleUpdate(req, res) {
   const uid = getUidFromRequest(req);
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const { id } = req.body || {};
+  const { id, pageId } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
   const owned = await sql`select 1 from posts where id = ${id} and uid = ${uid}`;
   if (owned.length === 0) return res.status(404).json({ error: 'not_found' });
+
+  let newPageId = null;
+  if (pageId) {
+    const pageOwned = await sql`select 1 from pages where id = ${pageId} and uid = ${uid}`;
+    if (pageOwned.length === 0) return res.status(403).json({ error: 'forbidden' });
+    newPageId = pageId;
+  }
 
   const clean = sanitizePost(req.body || {});
   await sql`
     update posts set
       title = ${clean.title},
       content = ${clean.content},
+      cover_image = ${clean.coverImage},
       images = ${JSON.stringify(clean.images)}::jsonb,
       visibility = ${clean.visibility},
+      page_id = coalesce(${newPageId}, page_id),
       updated_at = now()
     where id = ${id} and uid = ${uid}
   `;
