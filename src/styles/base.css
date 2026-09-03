@@ -621,6 +621,39 @@ body {
   font-size: 13px;
 }
 
+.theme-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.theme-swatch {
+  padding: 14px 8px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.theme-swatch.active {
+  outline: 2px solid var(--color-text);
+  outline-offset: 2px;
+}
+
+.theme-color-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.theme-color-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
 .modal-box textarea {
   width: 100%;
   padding: 10px 12px;

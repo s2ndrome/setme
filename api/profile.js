@@ -1,6 +1,7 @@
 import { sql } from './_lib/db.js';
 import { getUidFromRequest } from './_lib/auth.js';
 import { sanitizeCss } from './_lib/css.js';
+import { sanitizeThemeColors } from './_lib/theme.js';
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
 
@@ -10,7 +11,7 @@ async function handleGet(req, res) {
 
   const result = await sql`
     select u.id, u.username, u.nickname, u.bio, u.profile_image,
-           h.visibility, h.theme, h.background, h.header_image, h.custom_css
+           h.visibility, h.theme, h.background, h.header_image, h.custom_css, h.theme_colors
     from users u
     left join homes h on h.uid = u.id
     where u.username = ${username}
@@ -37,7 +38,8 @@ async function handleGet(req, res) {
       theme: row.theme,
       background: row.background,
       headerImage: row.header_image || '',
-      customCss: row.custom_css || ''
+      customCss: row.custom_css || '',
+      themeColors: row.theme_colors || {}
     },
     isOwner
   });
@@ -87,8 +89,10 @@ async function handleUpdate(req, res) {
   const uid = getUidFromRequest(req);
   if (!uid) return res.status(401).json({ error: 'unauthorized' });
 
-  const { nickname, bio, profileImage, visibility, theme, background, headerImage, customCss } = req.body || {};
+  const { nickname, bio, profileImage, visibility, theme, background, headerImage, customCss, themeColors } =
+    req.body || {};
   const cleanCustomCss = customCss !== undefined ? sanitizeCss(customCss) : undefined;
+  const cleanThemeColors = themeColors !== undefined ? sanitizeThemeColors(themeColors) : undefined;
 
   if (nickname !== undefined || bio !== undefined || profileImage !== undefined) {
     await sql`
@@ -105,7 +109,8 @@ async function handleUpdate(req, res) {
     theme !== undefined ||
     background !== undefined ||
     headerImage !== undefined ||
-    cleanCustomCss !== undefined
+    cleanCustomCss !== undefined ||
+    cleanThemeColors !== undefined
   ) {
     await sql`
       update homes set
@@ -114,6 +119,7 @@ async function handleUpdate(req, res) {
         background = coalesce(${background ? JSON.stringify(background) : null}::jsonb, background),
         header_image = coalesce(${headerImage}, header_image),
         custom_css = coalesce(${cleanCustomCss}, custom_css),
+        theme_colors = coalesce(${cleanThemeColors ? JSON.stringify(cleanThemeColors) : null}::jsonb, theme_colors),
         updated_at = now()
       where uid = ${uid}
     `;

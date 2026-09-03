@@ -1,6 +1,7 @@
 import { createUserProfile, isValidUsername, isUsernameAvailable } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 import { applyCustomCss } from '../ui/customCss.js';
+import { resetTheme } from '../ui/theme.js';
 
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -13,6 +14,7 @@ function withTimeout(promise, ms) {
 
 export function renderOnboarding(container, { currentUser }) {
   applyCustomCss('');
+  resetTheme();
 
   container.innerHTML = `
     <section class="auth-form">

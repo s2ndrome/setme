@@ -1,9 +1,11 @@
 import { signUp, signIn } from '../api/client.js';
 import { showToast } from '../ui/toast.js';
 import { applyCustomCss } from '../ui/customCss.js';
+import { resetTheme } from '../ui/theme.js';
 
 export function renderLanding(container, { currentUser, profile }) {
   applyCustomCss('');
+  resetTheme();
 
   if (currentUser && profile) {
     container.innerHTML = `
