@@ -41,6 +41,23 @@ function linesOf(text) {
     .filter(Boolean);
 }
 
+function donutRowsOf(content) {
+  if (Array.isArray(content.segments)) {
+    return content.segments
+      .map((s) => ({ label: String(s?.label || '').trim(), value: Number(s?.value) }))
+      .filter((row) => row.label && Number.isFinite(row.value) && row.value > 0);
+  }
+  // legacy single-textarea format ("라벨|값" per line), kept renderable
+  // for widgets saved before the per-item fields existed.
+  return linesOf(content.segments)
+    .map((line) => {
+      const [label, valueRaw] = line.split('|').map((s) => (s || '').trim());
+      const value = Number(valueRaw);
+      return { label: label || line, value: Number.isFinite(value) ? Math.max(0, value) : 0 };
+    })
+    .filter((row) => row.value > 0);
+}
+
 function bannerGridItemHTML(item) {
   const body = item.found && item.image
     ? `<img src="${escapeHtml(item.image)}" alt="">`
@@ -204,47 +221,11 @@ const WIDGETS = {
       `;
     }
   },
-  friends: {
-    label: '친구 링크',
-    width: 320,
-    height: 200,
-    content: { title: 'FRIENDS', items: '' },
-    style: {},
-    render(content) {
-      const items = linesOf(content.items).map((line) => {
-        const [label, href] = line.split('|').map((s) => (s || '').trim());
-        return { label: label || line, href: safeHref(href) };
-      });
-      return `
-        <div class="w-friends">
-          <h4>${escapeHtml(content.title || 'FRIENDS')}</h4>
-          <div class="w-friends-grid">
-            ${items
-              .map((item) =>
-                item.href
-                  ? `<a class="w-friend" href="${escapeHtml(item.href)}" target="_blank" rel="noopener">${escapeHtml(item.label)}</a>`
-                  : `<span class="w-friend">${escapeHtml(item.label)}</span>`
-              )
-              .join('')}
-          </div>
-        </div>
-      `;
-    },
-    fields(content) {
-      return `
-        <label>제목
-          <input type="text" data-field="content.title" value="${escapeHtml(content.title || '')}">
-        </label>
-        <label>친구 목록 (한 줄에 "이름|https://링크")
-          <textarea data-field="content.items" rows="5" placeholder="이름|https://example.com">${escapeHtml(content.items || '')}</textarea>
-        </label>
-      `;
-    }
-  },
   banner: {
     label: '배너 목록 (친구 배너)',
     width: 320,
     height: 240,
+    autoHeight: true,
     content: { title: 'FRIENDS', layout: 'grid2', handles: '' },
     style: { blockBg: true, blockColor: '#ffffff' },
     render(content, style, el) {
@@ -522,17 +503,11 @@ const WIDGETS = {
     label: '도넛 차트',
     width: 260,
     height: 260,
-    content: { segments: '' },
+    content: { segments: [] },
     style: {},
     render(content) {
       const palette = ['#f76c6c', '#ffd166', '#4ade80', '#60a5fa', '#a78bfa', '#f472b6'];
-      const rows = linesOf(content.segments)
-        .map((line) => {
-          const [label, valueRaw] = line.split('|').map((s) => (s || '').trim());
-          const value = Number(valueRaw);
-          return { label: label || line, value: Number.isFinite(value) ? Math.max(0, value) : 0 };
-        })
-        .filter((row) => row.value > 0);
+      const rows = donutRowsOf(content);
       const total = rows.reduce((sum, row) => sum + row.value, 0);
       if (total === 0) return `<div class="ce-placeholder">항목을 추가해주세요</div>`;
 
@@ -561,12 +536,8 @@ const WIDGETS = {
         </div>
       `;
     },
-    fields(content) {
-      return `
-        <label>항목 (한 줄에 "라벨|값")
-          <textarea data-field="content.segments" rows="5" placeholder="독서|30&#10;운동|20&#10;게임|50">${escapeHtml(content.segments || '')}</textarea>
-        </label>
-      `;
+    fields() {
+      return `<div id="donutFields"></div>`;
     }
   }
 };
@@ -633,6 +604,13 @@ function elementBodyHTML(el) {
   }
 }
 
+// A widget can opt out of the fixed-height resize box (e.g. a banner
+// list, which can hold any number of entries) — its element box then
+// grows to fit its content instead of clipping/scrolling within el.height.
+function isAutoHeight(el) {
+  return el.type === 'widget' && !!WIDGETS[el.content?.widgetKind]?.autoHeight;
+}
+
 // Shared by the editor's .ce-body and the static (view-mode) node — an
 // element/widget can optionally sit inside an opaque, colored block
 // instead of rendering straight onto the page background.
@@ -665,7 +643,7 @@ export function renderStaticCanvas(mount, { background, elements }) {
       left: `${el.x}px`,
       top: `${el.y}px`,
       width: `${el.width}px`,
-      height: `${el.height}px`,
+      height: isAutoHeight(el) ? 'auto' : `${el.height}px`,
       transform: `rotate(${el.rotation || 0}deg)`,
       opacity: el.opacity ?? 1,
       zIndex: el.zIndex ?? 0,
@@ -776,7 +754,7 @@ export function mountEditor({
     node.style.left = `${el.x}px`;
     node.style.top = `${el.y}px`;
     node.style.width = `${el.width}px`;
-    node.style.height = `${el.height}px`;
+    node.style.height = isAutoHeight(el) ? 'auto' : `${el.height}px`;
     node.style.transform = `rotate(${el.rotation || 0}deg)`;
     node.style.opacity = el.opacity ?? 1;
     node.style.zIndex = el.zIndex ?? 0;
@@ -1278,6 +1256,9 @@ export function mountEditor({
     if (el.type === 'widget' && el.content?.widgetKind === 'gallery') {
       renderGalleryFields(el);
     }
+    if (el.type === 'widget' && el.content?.widgetKind === 'donut') {
+      renderDonutFields(el);
+    }
   }
 
   function elementFieldsHTML(el) {
@@ -1349,6 +1330,62 @@ export function mountEditor({
       return def ? def.fields(content, style) : '';
     }
     return '';
+  }
+
+  function renderDonutFields(el) {
+    const segments = Array.isArray(el.content.segments) ? el.content.segments : [];
+    const wrap = container.querySelector('#donutFields');
+    if (!wrap) return;
+    wrap.innerHTML = `
+      <div class="chart-fields-list">
+        ${segments
+          .map(
+            (s, i) => `
+          <div class="chart-field-row" data-i="${i}">
+            <input type="text" placeholder="항목" data-donut-label="${i}" value="${escapeHtml(s?.label || '')}">
+            <input type="number" min="0" placeholder="%" data-donut-value="${i}" value="${s?.value ?? ''}">
+            <button type="button" data-donut-remove="${i}">✕</button>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+      <button type="button" class="btn btn-ghost" data-donut-add="1">항목 추가</button>
+    `;
+    wrap.querySelectorAll('[data-donut-label]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const i = Number(input.dataset.donutLabel);
+        segments[i] = { ...segments[i], label: input.value };
+        el.content = { ...el.content, segments };
+        refreshElementBody(el);
+        markDirty();
+      });
+    });
+    wrap.querySelectorAll('[data-donut-value]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const i = Number(input.dataset.donutValue);
+        segments[i] = { ...segments[i], value: Number(input.value) };
+        el.content = { ...el.content, segments };
+        refreshElementBody(el);
+        markDirty();
+      });
+    });
+    wrap.querySelectorAll('[data-donut-remove]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        segments.splice(Number(btn.dataset.donutRemove), 1);
+        el.content = { ...el.content, segments };
+        renderDonutFields(el);
+        refreshElementBody(el);
+        markDirty();
+      });
+    });
+    wrap.querySelector('[data-donut-add]').addEventListener('click', () => {
+      segments.push({ label: '', value: 0 });
+      el.content = { ...el.content, segments };
+      renderDonutFields(el);
+      refreshElementBody(el);
+      markDirty();
+    });
   }
 
   function renderGalleryFields(el) {

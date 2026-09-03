@@ -368,7 +368,6 @@ input[type="color"]::-moz-color-swatch {
 .w-dday,
 .w-divider,
 .w-pref,
-.w-friends,
 .w-collapse,
 .w-gallery,
 .w-guestbook,
@@ -1100,6 +1099,39 @@ input[type="color"]::-moz-color-swatch {
   width: 100%;
   border-radius: 8px;
   border: 1px solid var(--color-border);
+}
+
+.chart-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chart-field-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.chart-field-row input[type="text"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.chart-field-row input[type="number"] {
+  width: 56px;
+}
+
+.chart-field-row button {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: #222;
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
 }
 
 @media (max-width: 720px) {
